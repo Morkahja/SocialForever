@@ -4,6 +4,10 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.2.24 — You are not nearby
+
+- Your own name could show in the list when one path stored it with a space and another with a hyphen. Those forms are treated as the same person, and you stay off the list.
+
 ## 0.2.23 — No false “not playing” for two-word names
 
 - Hello whispers were still going out for hyphenated two-word names such as `Lyrianda-Nik`. The client looks that up as a spaced name and prints that nobody is playing.

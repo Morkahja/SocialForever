@@ -1,5 +1,9 @@
 # Social Forever — Changelog
 
+## 0.2.24 — 2026-10-06
+
+- Your own character no longer appears in the nearby list.
+
 ## 0.2.23 — 2026-10-05
 
 - Two-word names no longer trigger “No player named … is currently playing” when Social Forever tries to say hello. Those names are not whispered.

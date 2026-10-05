@@ -7,7 +7,7 @@ While you quest, the same players often cross your path again and again. Social 
 Over time, strangers can become familiar names.
 
 Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
-Current version: **0.2.23**
+Current version: **0.2.24**
 
 ## What it does
 

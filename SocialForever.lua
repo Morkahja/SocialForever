@@ -227,7 +227,12 @@ end
 
 local function MakeKey(name, realm)
     name = PlainString(name)
-    if not name or #name < 2 or #name > 24 then
+    if not name then
+        return nil
+    end
+    -- Forever two-word names arrive with a space or a hyphen. One form only.
+    name = name:gsub("%s+", "-")
+    if #name < 2 or #name > 24 then
         return nil
     end
     if name:find("[%c|%%%[%]]") then
@@ -242,7 +247,11 @@ local function MakeKey(name, realm)
 end
 
 local function SafeKey(key)
-    if type(key) ~= "string" or #key < 2 or #key > 50 then
+    if type(key) ~= "string" then
+        return nil
+    end
+    key = key:gsub("%s+", "-")
+    if #key < 2 or #key > 50 then
         return nil
     end
     if key:find("[%c|%%%[%]]") then
@@ -251,12 +260,23 @@ local function SafeKey(key)
     return key
 end
 
+local function SameKey(a, b)
+    if type(a) ~= "string" or type(b) ~= "string" then
+        return false
+    end
+    return a:gsub("[%s%-]+", ""):lower() == b:gsub("[%s%-]+", ""):lower()
+end
+
 local function MyKey()
     local ok, name, realm = pcall(UnitName, "player")
     if not ok then
         return nil
     end
     return MakeKey(name, realm)
+end
+
+local function IsMe(key)
+    return SameKey(key, MyKey())
 end
 
 local function ValidColor(color)
@@ -862,7 +882,7 @@ end
 
 local function Remember(key, bucket, classFile, ttl, yards, level)
     key = SafeKey(key)
-    if not key or key == MyKey() or IsVisibleMobName(key) then
+    if not key or IsMe(key) or IsVisibleMobName(key) then
         if key then
             sightings[key] = nil
         end
@@ -983,7 +1003,7 @@ local function Publish()
         }
     end
     for key, seen in pairs(sightings) do
-        if IsVisibleMobName(key) then
+        if IsMe(key) or IsVisibleMobName(key) then
             sightings[key] = nil
             inviteState[key] = nil
         elseif InMyParty and InMyParty(key) then
@@ -1009,7 +1029,7 @@ local function Publish()
     end
     local zoneFound = {}
     for key, seen in pairs(zoneSeen) do
-        if now - (seen.at or 0) > ZONE_TTL or IsVisibleMobName(key) then
+        if IsMe(key) or now - (seen.at or 0) > ZONE_TTL or IsVisibleMobName(key) then
             zoneSeen[key] = nil
         elseif not found[key] then
             zoneFound[key] = {
@@ -1062,7 +1082,7 @@ local function ConsiderUnit(unit, loose)
         return
     end
     local key, classFile = UnitIdentity(unit)
-    if not key or key == MyKey() then
+    if not key or IsMe(key) then
         return
     end
 
@@ -1167,7 +1187,7 @@ local function NoteZone(sender, channelString, channelBase, guid)
         return
     end
     local key = KeyFromSender(sender)
-    if not key or key == MyKey() or IsVisibleMobName(key) then
+    if not key or IsMe(key) or IsVisibleMobName(key) then
         return
     end
     local prev = zoneSeen[key]
@@ -1332,13 +1352,12 @@ end
 
 local function PartyKeys()
     local list = {}
-    local me = MyKey()
     for i = 1, 4 do
         local unit = "party" .. i
         local ok, exists = pcall(UnitExists, unit)
         if ok and PlainBool(exists) then
             local key = UnitIdentity(unit)
-            if key and key ~= me then
+            if key and not IsMe(key) then
                 list[#list + 1] = key
             end
         end
@@ -1349,7 +1368,7 @@ end
 InMyParty = function(key)
     local members = PartyKeys()
     for _, member in ipairs(members) do
-        if member == key then
+        if SameKey(member, key) then
             return true
         end
     end
@@ -1963,9 +1982,7 @@ local function OnAddon(prefix, msg, channel, sender)
         return
     end
     local name, realm = strsplit("-", sender or "", 2)
-    local senderKey = MakeKey(name, realm)
-    local me = MyKey()
-    if not senderKey or senderKey == me then
+    if not senderKey or IsMe(senderKey) then
         return
     end
     peers[senderKey] = GetTime()
@@ -2098,10 +2115,9 @@ function U.ShowRatePopup(members)
     end
     local list = {}
     local seen = {}
-    local me = MyKey()
     for _, key in ipairs(members) do
         key = SafeKey(key)
-        if key and key ~= me and not seen[key] then
+        if key and not IsMe(key) and not seen[key] then
             seen[key] = true
             list[#list + 1] = key
             if #list == 4 then
