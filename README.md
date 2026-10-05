@@ -7,7 +7,7 @@ While you quest, the same players often cross your path again and again. Social 
 Over time, strangers can become familiar names.
 
 Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
-Current version: **0.2.20**
+Current version: **0.2.21**
 
 ## What it does
 
@@ -196,6 +196,8 @@ Social Forever does not enable nameplates or use `/who` to build the list.
 
 The window normally sits above the chat frame.
 
+- The close **x** sits in the top-left corner, away from the gear button.
+- Hover the **x** for a reminder that `/sf` or `/socialforever` brings the window back.
 - Drag the title bar to move it.
 - Drag the `..` grip in the bottom-right corner to resize it.
 - Use the gear button to change the name size, background opacity, and friend auto-invite setting.

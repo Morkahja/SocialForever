@@ -4,6 +4,11 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.2.21 — Close sits on the left
+
+- The close **x** is in the top-left corner, so it is harder to hit by mistake when using the gear.
+- Hovering the **x** shows how to open the window again with `/sf` or `/socialforever`.
+
 ## 0.2.20 — Fade, then move, then fade back
 
 - A name that is about to change place fades to half opacity while it is still in the old place. It moves at half opacity, then fades back to full in the new place.
