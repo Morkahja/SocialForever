@@ -642,8 +642,32 @@ local function IsBlocked(key)
     return false
 end
 
+local function CanWhisperTarget(target)
+    if type(target) ~= "string" or target == "" or Secret(target) then
+        return false
+    end
+    if target:find("%s") then
+        return false
+    end
+    local mine = MyRealm()
+    local base = target
+    if mine and #target > #mine + 1 and target:lower():sub(-(#mine + 1)) == "-" .. mine:lower() then
+        base = target:sub(1, #(target) - #mine - 1)
+    end
+    -- Forever two-word names are stored as First-Second. Whispering that
+    -- form makes the client look up "First Second" and print that nobody
+    -- by that name is playing, even when they are standing next to you.
+    if base:find("-") or base:find("%s") then
+        return false
+    end
+    return true
+end
+
 local function MaybeHello(key)
     if not sendReady or not main:IsShown() then
+        return
+    end
+    if not CanWhisperTarget(key) then
         return
     end
     local now = GetTime()
@@ -1737,9 +1761,7 @@ local function Enqueue(target, msg)
     if not sendReady or type(target) ~= "string" or type(msg) ~= "string" then
         return
     end
-    -- A space is a real two-word name on this server. Whispering it makes the
-    -- client look the name up and report that nobody by that name is playing.
-    if target:find("%s") then
+    if not CanWhisperTarget(target) then
         return
     end
     if #msg > 250 or #queue >= 80 then
@@ -1970,7 +1992,7 @@ local function Pump()
         return
     end
     local item = table.remove(queue, 1)
-    if not item or type(item.target) ~= "string" or item.target:find("%s") then
+    if not item or not CanWhisperTarget(item.target) or type(item.msg) ~= "string" then
         return
     end
     pcall(C_ChatInfo.SendAddonMessage, PREFIX, item.msg, "WHISPER", item.target)

@@ -4,6 +4,11 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.2.23 — No false “not playing” for two-word names
+
+- Hello whispers were still going out for hyphenated two-word names such as `Lyrianda-Nik`. The client looks that up as a spaced name and prints that nobody is playing.
+- Two-word names are not whispered. One-word names still exchange marks as before.
+
 ## 0.2.22 — Sealed names in a dungeon
 
 - In a dungeon while grouped, reading a sealed unit name could error when the list refreshed. Those names are skipped instead of compared.
