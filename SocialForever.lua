@@ -157,7 +157,10 @@ local function Secret(value)
 end
 
 local function PlainString(value)
-    if type(value) ~= "string" or value == "" or Secret(value) then
+    if type(value) ~= "string" or Secret(value) then
+        return nil
+    end
+    if value == "" then
         return nil
     end
     return value

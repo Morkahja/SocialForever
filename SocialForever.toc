@@ -2,7 +2,7 @@
 ## Title: Social Forever
 ## Notes: Nearby players while questing, with invites and a memory of who was good to group with.
 ## Author: Babunigaming
-## Version: 0.2.21
+## Version: 0.2.22
 ## SavedVariables: SocialForeverDB
 ## IconTexture: Interface\Icons\INV_Misc_Note_01
 ## Category: Social

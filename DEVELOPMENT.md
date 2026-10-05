@@ -4,6 +4,10 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.2.22 — Sealed names in a dungeon
+
+- In a dungeon while grouped, reading a sealed unit name could error when the list refreshed. Those names are skipped instead of compared.
+
 ## 0.2.21 — Close sits on the left
 
 - The close **x** is in the top-left corner, so it is harder to hit by mistake when using the gear.
