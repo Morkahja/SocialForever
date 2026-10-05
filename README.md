@@ -1,14 +1,222 @@
 # Social Forever
 
-When you quest, the same people keep walking past you. Social Forever keeps a short list of them above your chat, so you can invite someone without digging through whispers and General.
+**Social Forever remembers the people you meet while playing World of Warcraft: Forever.**
 
-People standing near you sit at the top. Anyone who has spoken in General shows up under that, while they are still in the zone. Click a name to target them, or use the invite button beside the row. Right-click when a group was good or bad, and the next time you meet that person the memory is still there.
+While you quest, the same players often cross your path again and again. Social Forever keeps a small list of those people above your chat so they are easier to recognize, target, invite, and remember the next time you meet.
 
-Built by **Babunigaming** for World of Warcraft: Forever (Interface 16001). Current version **0.2.20**.
+Over time, strangers can become familiar names.
 
-The window sits above the chat frame. Nameplates stay off.
+Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
+Current version: **0.2.20**
 
-## Install
+## What it does
+
+Social Forever keeps track of players you encounter and gives you a simple social history for them.
+
+You can:
+
+- See recently encountered players in a small movable window.
+- Click a name to target that player.
+- Invite them directly from the list.
+- See how often you have encountered them before.
+- See where you have met them in the past.
+- Mark players as **Green**, **Yellow**, or **Red** based on your experience with them.
+- Add flags such as **Really friendly**, **Generous**, **Weird**, or **Bad behavior**.
+- Create your own custom flags.
+- Mark someone as **Kill on sight**.
+- Rate party members after a group ends.
+- Exchange marks and flags with nearby players who also use Social Forever.
+
+Your social memory is stored account-wide in `SocialForeverDB`.
+
+## The player list
+
+The window is split into two kinds of players.
+
+### Nearby
+
+Players the addon has recently detected around you appear at the top.
+
+A nearby player normally remains on the list for **3 minutes** after the last sighting. Seeing them again refreshes that timer.
+
+Out in the world, moving into another subzone removes players from the previous subzone immediately. Capital cities are treated as one larger place, so walking between areas of Ironforge or Stormwind does not clear everyone from the list.
+
+Party members remain visible until they leave the group.
+
+### In this zone
+
+Players who speak in **General** chat appear under the nearby players while they are still in your zone.
+
+They remain there for **10 minutes** after speaking.
+
+A player who is already in the Nearby section is not shown twice.
+
+When you change to another main zone, players left over from the previous zone are cleared after about **30 seconds**.
+
+## How players are ordered
+
+The list tries to keep the most relevant people near the top.
+
+It prioritizes:
+
+1. Players in your current zone and area.
+2. Players marked **Kill on sight** within their section.
+3. People you have encountered more often.
+4. Players seen more recently.
+
+The order refreshes every few seconds rather than constantly jumping around.
+
+New names fade in, departing names fade out, and names that change position briefly fade before moving.
+
+## Targeting and inviting
+
+Click a nearby player's name to try to target them.
+
+If the target does not resolve to that player, Social Forever removes them from the nearby list rather than pretending they are still there.
+
+Your current target is highlighted with a gold frame.
+
+The button beside a player can show:
+
+| Button | Meaning |
+| --- | --- |
+| **Invite** | Ready to invite them. |
+| **Invited** | An invitation has been sent. |
+| **Declined** | They declined. You can click again to invite them once more. |
+
+The invite button disappears while that player is already in your group and returns after they leave.
+
+## Familiar faces
+
+Social Forever remembers how often you encounter each player.
+
+Names gradually change color based on how familiar that person is compared with the player you have encountered most often:
+
+| Color | Familiarity |
+| --- | --- |
+| **White** | First encounter, or up to 30% of your highest count |
+| **Blue** | 31% to 80% |
+| **Purple** | 81% to 100% |
+
+A Green, Yellow, Red, or Kill on Sight mark overrides this familiarity color.
+
+Hover over a player to see more of their history, including:
+
+- When they were last seen.
+- The subzone where they were last seen.
+- Other zones or dungeons where you have encountered them.
+- How many times they have been nearby.
+- How many times they have appeared in the same zone.
+- Your mark and the shared mark.
+- Any flags attached to them.
+
+Their level appears once WoW has actually reported it through your target, mouseover, or group. A chat message by itself does not reveal a player's level.
+
+## Marks, flags, and Kill on Sight
+
+Right-click a player to add your own impression of them.
+
+### Marks
+
+- **Green** — someone you would happily group with again.
+- **Yellow** — neutral.
+- **Red** — someone you had a bad experience with.
+
+### Flags
+
+The built-in flags are:
+
+- Really friendly
+- Generous
+- Weird
+- Bad behavior
+
+You can also create your own custom flags.
+
+### Kill on Sight
+
+**Kill on sight** is a personal flag. It is never shared with other Social Forever users.
+
+## Rating a group
+
+When a party ends, or when someone leaves your party, Social Forever can ask:
+
+**How was this group?**
+
+Each player can be rated:
+
+- **Again**
+- **Okay**
+- **Bad**
+
+These become Green, Yellow, and Red marks.
+
+Converting the group into a raid does not open the rating window.
+
+## Shared marks
+
+If another nearby player is also using Social Forever, the two addons can quietly exchange marks and flags through WoW's addon-message system.
+
+Nothing is printed in normal chat.
+
+Shared marks use a simple score:
+
+- Green = +1
+- Yellow = 0
+- Red = -1
+
+Your own mark is included in the result. The tooltip shows how many good, okay, and bad marks contributed to the shared impression.
+
+Some information always stays personal and is never shared:
+
+- How often you have seen someone.
+- Kill on sight.
+- How many times you have grouped with someone.
+
+Two-word character names are not contacted through the hidden addon whisper because this client can incorrectly report those players as offline even while they are standing nearby.
+
+## How "nearby" works
+
+Social Forever does **not** scan every player within a fixed radius. WoW does not give addons a simple list of everyone standing around you.
+
+Instead, Social Forever builds the nearby list from players the game has already exposed through things such as:
+
+- Your target or mouseover.
+- Party members.
+- Speech and emotes.
+- Crafting and other activity messages.
+- Duel or trade interactions.
+- Other units the client is already tracking.
+
+Because of that, a silent player standing beside you may not appear immediately if the game has not exposed them to the addon yet.
+
+Social Forever does not enable nameplates or use `/who` to build the list.
+
+## Window and settings
+
+The window normally sits above the chat frame.
+
+- Drag the title bar to move it.
+- Drag the `..` grip in the bottom-right corner to resize it.
+- Use the gear button to change the name size, background opacity, and friend auto-invite setting.
+- Use the mouse wheel to scroll longer lists.
+- Press Escape to close the right-click menu or group-rating window. The main Social Forever window stays open.
+
+Use:
+
+```text
+/sf
+```
+
+or
+
+```text
+/socialforever
+```
+
+to show or hide the window. The addon-compartment button does the same.
+
+## Installation
 
 Copy the `SocialForever` folder into:
 
@@ -16,76 +224,12 @@ Copy the `SocialForever` folder into:
 Interface/AddOns/SocialForever
 ```
 
-Then type `/reload`.
+Then reload the game:
 
-`/sf` or `/socialforever` shows and hides the window. The addon compartment button does the same.
-
-## The list
-
-The title is the place you are standing in, plus how many people are nearby. In Ironforge that looks like **The Great Forge (4)**. In a capital city the title still uses the subzone, but the whole city counts as one place for memory.
-
-| | |
-| --- | --- |
-| Nearby | Stays for 3 minutes while you remain in the same subzone. Out in the world, a different subzone removes them right away. A capital city counts as one place. Group members stay until they leave the group. A new name fades in from nothing. A name that changes place fades to half, moves, then fades back. Only a name that changes place does this. A name that leaves fades out over three seconds and is gone at the end. |
-| In this zone | Stays for 10 minutes after speaking in General. Someone already nearby is not repeated here. |
-| New zone | 30 seconds after you change zone, names from the previous zone are removed. |
-| Order | This zone first, then how often you have seen them, then who has more time left. The order refreshes every 3 seconds. |
-| Kill on sight | Stays at the top of that group. |
-
-Names use the same lettering as the rest of the game, so a Chinese name shows as characters rather than empty boxes. A click on a name tries to target them. If that target does not land, they leave the nearby list. The row you currently have targeted keeps a gold frame and background, so it stays visible after the mouse leaves. The button on the right runs `/invite` with the full name.
-
-| Button | Meaning |
-| --- | --- |
-| Invite | Ready to invite. |
-| Invited | The invite was sent. |
-| Declined | They declined. Click again to ask once more. |
-
-The button hides while that player is in your group, and it returns to **Invite** after they leave.
-
-## Names
-
-The level appears beside the name once the game has reported it, from your target, your mouseover, or your group. A chat line alone does not include a level.
-
-Name color shows how often you have seen that person, compared with the person you have seen the most:
-
-| Color | How often |
-| --- | --- |
-| White | First time, or 30% or less of your highest |
-| Blue | 31% to 80% |
-| Purple | 81% to 100% |
-
-A green, yellow, or red mark replaces that color. Kill on sight uses its own red.
-
-The tooltip says when they were last seen, in whole minutes, and the subzone, such as **Last seen 1 minute ago in Astranaar**. Under that, **Seen before in Ashenvale, Darnassus** lists the zones and dungeons where you have met them. It also shows how many times they have been nearby, how many times they have been in the same zone, your mark, the shared mark, and any flags.
-
-## Marks, flags, and kill on sight
-
-Right-click a name.
-
-- **Green** means group again. **Yellow** is neutral. **Red** is unpleasant.
-- Flags start with Really friendly, Generous, Weird, and Bad behavior. The box at the bottom adds a flag of your own.
-- **Kill on sight** is personal. It is not shared with other players.
-
-After a group ends, or when someone leaves your party, a small window asks how it was: **Again**, **Okay**, or **Bad**. That sets the mark. A raid conversion does not open it.
-
-## Shared marks
-
-If someone else nearby is also running Social Forever, the two copies can exchange marks and flags through a hidden addon whisper. Nothing is printed in chat. A two-word name is not whispered, because that lookup tells you the player is not online even when they are standing in front of you.
-
-Green counts as +1, yellow as 0, and red as −1. Your mark is included. The tooltip shows how many good, okay, and bad marks made the general color.
-
-These stay on your account only:
-
-- How often you have seen someone
-- Kill on sight
-- How many times you have grouped with them
-
-Memory is account-wide, in `SocialForeverDB`.
-
-## Window
-
-Drag the title bar to move it. Drag the `..` grip at the bottom-right to resize it. The gear sets the name size (16, 18, or 20) and the background opacity. The border stays solid. Escape closes the right-click menu and the rating window. The main list stays open.
+```text
+/reload
+```
 
 ## Development
 
-The step-by-step history is in [DEVELOPMENT.md](DEVELOPMENT.md).
+The version-by-version development history is in [DEVELOPMENT.md](DEVELOPMENT.md).
