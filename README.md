@@ -7,7 +7,7 @@ While you quest, the same players often cross your path again and again. Social 
 Over time, strangers can become familiar names.
 
 Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
-Current version: **0.2.24**
+Current version: **0.2.25**
 
 ## What it does
 
@@ -181,16 +181,19 @@ Social Forever does **not** scan every player within a fixed radius. WoW does no
 
 Instead, Social Forever builds the nearby list from players the game has already exposed through things such as:
 
-- Your target or mouseover.
-- Party members.
-- Speech and emotes.
-- Crafting and other activity messages.
-- Duel or trade interactions.
-- Other units the client is already tracking.
+- Your target, mouseover, focus, or soft target.
+- Friendly nameplates, if you have turned them on yourself (Shift+V). Social Forever never changes that setting.
+- Someone who buffs you, when Forever still exposes the caster.
+- A resurrection cast on you.
+- Other players who showed up in the damage meter after a fight ends.
+- Party and raid members who are actually within range.
+- Say, emotes, craft lines, duel, and trade.
+
+**In this zone** is broader and weaker. It includes people who speak in General, people currently on the General channel roster, and yell. Being on that roster alone does not count as an encounter or raise familiarity.
 
 Because of that, a silent player standing beside you may not appear immediately if the game has not exposed them to the addon yet.
 
-Social Forever does not enable nameplates or use `/who` to build the list.
+Social Forever does not enable nameplates or use `/who` to build the list. The combat log event stream is not used.
 
 ## Window and settings
 

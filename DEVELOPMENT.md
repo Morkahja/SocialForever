@@ -4,6 +4,14 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.2.25 — More ways to notice people
+
+- Friendly nameplates you turn on yourself can feed Nearby. Social Forever never flips that setting.
+- A player who buffs you, or resurrects you, can appear Nearby when Forever still exposes the caster.
+- After combat ends, other players from the damage meter can appear Nearby when that data is readable.
+- The General channel roster and yell fill **In this zone** only. They do not raise familiarity.
+- Raid members in range and a few more unit tokens are scanned. Secret values are skipped, not forced.
+
 ## 0.2.24 — You are not nearby
 
 - Your own name could show in the list when one path stored it with a space and another with a hyphen. Those forms are treated as the same person, and you stay off the list.

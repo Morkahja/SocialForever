@@ -5,9 +5,12 @@
 -- Another player's quest log is not readable, so this cannot put people on the
 -- same quest first. Nearby players come from speech, emotes, crafting lines,
 -- the cursor, and other units the game already tracks. Creature names are left out.
--- Nameplates stay off. A nearby name stays for three minutes, and each new
--- sighting refreshes that timer. Out in the world, a different subzone drops
--- them immediately. A capital city counts as one place.
+-- Nameplates stay off unless the player turns them on. A nearby name stays for
+-- three minutes, and each new sighting refreshes that timer. Out in the world,
+-- a different subzone drops them immediately. A capital city counts as one place.
+-- Nearby also comes from nameplates, buffs on you, resurrections, and post-combat
+-- meter participants when Forever exposes them. General roster and yell stay
+-- zone-only and do not count as encounters.
 -- Group members stay until they leave the group.
 -- People you have seen more often sit higher.
 -- Ratings are account-wide. Other copies of this addon can whisper their marks
@@ -578,6 +581,11 @@ local LOOK_UNITS = {
     "softinteract",
     "targettarget",
     "mouseovertarget",
+    "focustarget",
+    "softfriendtarget",
+    "softenemytarget",
+    "softinteracttarget",
+    "pettarget",
     "party1target",
     "party2target",
     "party3target",
@@ -587,6 +595,7 @@ local LOOK_UNITS = {
 
 local sightings = {}
 local zoneSeen = {}
+local zoneRoster = {}
 local inviteState = {}
 local groupedBefore = {}
 local sortHold = { at = 0, near = {}, zone = {} }
@@ -634,6 +643,7 @@ local SKIP_WORDS = {
 local function ClearSightings()
     wipe(sightings)
     wipe(zoneSeen)
+    wipe(zoneRoster)
     wipe(inZone)
     wipe(inviteState)
     wipe(groupedBefore)
@@ -982,6 +992,11 @@ local function PurgeOtherZones()
             zoneSeen[key] = nil
         end
     end
+    for key, seen in pairs(zoneRoster) do
+        if seen.zone ~= zone then
+            zoneRoster[key] = nil
+        end
+    end
 end
 
 local function Publish()
@@ -1038,6 +1053,20 @@ local function Publish()
                 zone = seen.zone,
                 at = seen.at,
                 ttl = ZONE_TTL,
+            }
+        end
+    end
+    for key, seen in pairs(zoneRoster) do
+        if IsMe(key) or now - (seen.at or 0) > ZONE_TTL or IsVisibleMobName(key) then
+            zoneRoster[key] = nil
+        elseif not found[key] and not zoneFound[key] then
+            zoneFound[key] = {
+                key = key,
+                class = seen.class,
+                zone = seen.zone,
+                at = seen.at,
+                ttl = ZONE_TTL,
+                roster = true,
             }
         end
     end
@@ -1118,6 +1147,15 @@ local function Scan()
     end
     for i = 1, 4 do
         pcall(ConsiderUnit, "party" .. i, false)
+    end
+    if type(IsInRaid) == "function" then
+        local raidOk, inRaid = pcall(IsInRaid)
+        if raidOk and PlainBool(inRaid) == true then
+            for i = 1, 40 do
+                pcall(ConsiderUnit, "raid" .. i, false)
+                pcall(ConsiderUnit, "raid" .. i .. "target", true)
+            end
+        end
     end
     Publish()
 end
@@ -1202,6 +1240,314 @@ local function NoteZone(sender, channelString, channelBase, guid)
     }
     NoteHistory(key)
     Publish()
+end
+
+--------------------------------------------------
+-- Extra detection sources (kept on U to save chunk locals)
+--------------------------------------------------
+
+function U.KeyFromGuid(guid)
+    guid = PlainString(guid)
+    if not guid or guid == "" then
+        return nil
+    end
+    if guid:sub(1, 6) ~= "Player" then
+        return nil
+    end
+    if type(GetPlayerInfoByGUID) ~= "function" then
+        return nil
+    end
+    local ok, className, classFile, _, _, _, name, realm = pcall(GetPlayerInfoByGUID, guid)
+    if not ok then
+        return nil
+    end
+    name = PlainString(name)
+    realm = PlainString(realm)
+    classFile = PlainString(classFile) or PlainString(className)
+    local key = MakeKey(name, realm)
+    if not key or IsMe(key) then
+        return nil
+    end
+    return key, classFile
+end
+
+function U.NoteZoneWeak(sender, guid)
+    local key = KeyFromSender(sender)
+    local classFile
+    if not key and guid then
+        key, classFile = U.KeyFromGuid(guid)
+    end
+    if not key or IsMe(key) or IsVisibleMobName(key) then
+        return
+    end
+    local prev = zoneSeen[key]
+    zoneSeen[key] = {
+        key = key,
+        class = classFile or (prev and prev.class),
+        zone = CurrentZone() or (prev and prev.zone),
+        at = GetTime(),
+        weak = true,
+    }
+    Publish()
+end
+
+function U.NoteNearbyNamed(sender, guid)
+    local key = KeyFromSender(sender)
+    local classFile
+    if not key and guid then
+        key, classFile = U.KeyFromGuid(guid)
+    end
+    if not key or IsMe(key) or IsVisibleMobName(key) then
+        return
+    end
+    Remember(key, 1, classFile, UNIT_TTL)
+    Publish()
+end
+
+function U.FindGeneralChannel()
+    if type(GetNumDisplayChannels) ~= "function" or type(GetChannelDisplayInfo) ~= "function" then
+        return nil
+    end
+    local ok, count = pcall(GetNumDisplayChannels)
+    count = ok and PlainNumber(count) or nil
+    if not count or count < 1 then
+        return nil
+    end
+    local function isGeneralName(name)
+        name = PlainString(name)
+        if not name then
+            return false
+        end
+        name = name:lower():gsub("^%d+%.%s*", "")
+        return name == "general" or name:sub(1, 8) == "general " or name:sub(1, 10) == "general -"
+    end
+    for i = 1, count do
+        local infoOk, name, _, _, _, _, _, channelNumber = pcall(GetChannelDisplayInfo, i)
+        channelNumber = infoOk and PlainNumber(channelNumber) or nil
+        if infoOk and channelNumber and isGeneralName(name) then
+            return channelNumber
+        end
+    end
+    return nil
+end
+
+function U.RefreshGeneralRoster()
+    if not C_ChatInfo or type(C_ChatInfo.GetChannelRosterInfo) ~= "function" then
+        return
+    end
+    local channelIndex = U.FindGeneralChannel()
+    if not channelIndex then
+        wipe(zoneRoster)
+        Publish()
+        return
+    end
+    local memberCount
+    if type(GetNumChannelMembers) == "function" then
+        local ok, n = pcall(GetNumChannelMembers, channelIndex)
+        memberCount = ok and PlainNumber(n) or nil
+    end
+    if (not memberCount or memberCount < 1) and type(C_ChatInfo.GetNumChannelMembers) == "function" then
+        local ok, n = pcall(C_ChatInfo.GetNumChannelMembers, channelIndex)
+        memberCount = ok and PlainNumber(n) or nil
+    end
+    if not memberCount or memberCount < 1 then
+        return
+    end
+    if memberCount > 200 then
+        memberCount = 200
+    end
+    local now = GetTime()
+    local zone = CurrentZone()
+    local nextRoster = {}
+    local rosterFn = C_ChatInfo.GetChannelRosterInfo
+    for i = 1, memberCount do
+        local ok, name, _, _, _, _, _, guid = pcall(rosterFn, channelIndex, i)
+        if not ok and type(GetChannelRosterInfo) == "function" then
+            ok, name, _, _, _, _, _, guid = pcall(GetChannelRosterInfo, channelIndex, i)
+        end
+        if ok then
+            name = PlainString(name)
+            guid = PlainString(guid)
+            local key = name and KeyFromSender(name) or nil
+            local classFile
+            if (not key) and guid then
+                key, classFile = U.KeyFromGuid(guid)
+            end
+            if key and not IsMe(key) and not IsVisibleMobName(key) then
+                nextRoster[key] = {
+                    key = key,
+                    class = classFile,
+                    zone = zone,
+                    at = now,
+                    roster = true,
+                }
+            end
+        end
+    end
+    wipe(zoneRoster)
+    for key, seen in pairs(nextRoster) do
+        zoneRoster[key] = seen
+    end
+    Publish()
+end
+
+function U.OnNameplateAdded(unit)
+    unit = PlainString(unit)
+    if not unit then
+        return
+    end
+    pcall(ConsiderUnit, unit, true)
+    Publish()
+end
+
+function U.OnPlayerAura(unit, updateInfo)
+    unit = PlainString(unit) or unit
+    if unit ~= "player" then
+        return
+    end
+    if type(updateInfo) ~= "table" or Secret(updateInfo) then
+        return
+    end
+    local added = updateInfo.addedAuras
+    if type(added) ~= "table" or Secret(added) then
+        return
+    end
+    local found = false
+    for i = 1, #added do
+        local aura = added[i]
+        if type(aura) == "table" and not Secret(aura) then
+            local helpful = aura.isHelpful
+            if helpful == nil and type(aura.isHarmful) == "boolean" then
+                helpful = not aura.isHarmful
+            end
+            if PlainBool(helpful) == true or helpful == true then
+                local key, classFile
+                local source = PlainString(aura.sourceUnit)
+                if source then
+                    local selfOk, isSelf = pcall(UnitIsUnit, source, "player")
+                    if not (selfOk and PlainBool(isSelf) == true) then
+                        local playerOk, isPlayer = pcall(UnitIsPlayer, source)
+                        if playerOk and PlainBool(isPlayer) == true then
+                            key, classFile = UnitIdentity(source)
+                        end
+                    end
+                end
+                if not key and C_UnitAuras and type(C_UnitAuras.GetAuraCasterGUID) == "function" then
+                    local instanceId = PlainNumber(aura.auraInstanceID)
+                    if instanceId then
+                        local ok, casterGuid = pcall(C_UnitAuras.GetAuraCasterGUID, "player", instanceId)
+                        casterGuid = ok and PlainString(casterGuid) or nil
+                        if casterGuid then
+                            key, classFile = U.KeyFromGuid(casterGuid)
+                        end
+                    end
+                end
+                if key and not IsMe(key) then
+                    Remember(key, 1, classFile, UNIT_TTL)
+                    found = true
+                end
+            end
+        end
+    end
+    if found then
+        Publish()
+    end
+end
+
+function U.HarvestDamageMeter()
+    if not C_DamageMeter then
+        return
+    end
+    if type(C_DamageMeter.IsDamageMeterAvailable) == "function" then
+        local ok, available = pcall(C_DamageMeter.IsDamageMeterAvailable)
+        if ok and PlainBool(available) == false then
+            return
+        end
+    end
+    local sessionTypes = {}
+    if Enum and Enum.DamageMeterType then
+        sessionTypes = {
+            Enum.DamageMeterType.DamageDone,
+            Enum.DamageMeterType.DamageTaken,
+            Enum.DamageMeterType.HealingDone,
+            Enum.DamageMeterType.Interrupts,
+            Enum.DamageMeterType.Dispels,
+        }
+    else
+        sessionTypes = { 0, 7, 2, 5, 6 }
+    end
+    local currentType = Enum and Enum.DamageMeterSessionType and Enum.DamageMeterSessionType.Current or 1
+    local seen = {}
+    local found = false
+    local function takeSource(source)
+        if type(source) ~= "table" or Secret(source) then
+            return
+        end
+        if PlainBool(source.isLocalPlayer) == true then
+            return
+        end
+        if source.sourceCreatureID and PlainNumber(source.sourceCreatureID) then
+            return
+        end
+        local guid = PlainString(source.sourceGUID)
+        local key, classFile
+        if guid then
+            key, classFile = U.KeyFromGuid(guid)
+        end
+        if not key then
+            local name = PlainString(source.name)
+            if name then
+                key = KeyFromSender(name)
+                classFile = PlainString(source.classFilename)
+            end
+        end
+        if not key or IsMe(key) or seen[key] or IsVisibleMobName(key) then
+            return
+        end
+        seen[key] = true
+        Remember(key, 2, classFile, UNIT_TTL)
+        found = true
+    end
+    for _, meterType in ipairs(sessionTypes) do
+        if meterType ~= nil and type(C_DamageMeter.GetCombatSessionFromType) == "function" then
+            local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, currentType, meterType)
+            if ok and type(session) == "table" and not Secret(session) then
+                local sources = session.combatSources
+                if type(sources) == "table" and not Secret(sources) then
+                    for i = 1, #sources do
+                        takeSource(sources[i])
+                    end
+                end
+            end
+        end
+    end
+    if type(C_DamageMeter.GetAvailableCombatSessions) == "function" then
+        local ok, sessions = pcall(C_DamageMeter.GetAvailableCombatSessions)
+        if ok and type(sessions) == "table" then
+            for i = 1, #sessions do
+                local entry = sessions[i]
+                local sessionID = type(entry) == "table" and PlainNumber(entry.sessionID) or PlainNumber(entry)
+                if sessionID and type(C_DamageMeter.GetCombatSessionFromID) == "function" then
+                    for _, meterType in ipairs(sessionTypes) do
+                        if meterType ~= nil then
+                            local sOk, session = pcall(C_DamageMeter.GetCombatSessionFromID, sessionID, meterType)
+                            if sOk and type(session) == "table" and not Secret(session) then
+                                local sources = session.combatSources
+                                if type(sources) == "table" and not Secret(sources) then
+                                    for s = 1, #sources do
+                                        takeSource(sources[s])
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    if found then
+        Publish()
+    end
 end
 
 local CRAFT_VERBS = {
@@ -4106,7 +4452,19 @@ U.Listen("CHAT_MSG_LOOT")
 U.Listen("CHAT_MSG_COMBAT_HONOR_GAIN")
 U.Listen("CHAT_MSG_COMBAT_MISC_INFO")
 U.Listen("CHAT_MSG_CHANNEL")
+U.Listen("CHAT_MSG_YELL")
 U.Listen("FRIENDLIST_UPDATE")
+U.Listen("NAME_PLATE_UNIT_ADDED")
+U.Listen("UNIT_AURA")
+U.Listen("CHANNEL_ROSTER_UPDATE")
+U.Listen("CHANNEL_COUNT_UPDATE")
+U.Listen("PARTY_INVITE_REQUEST")
+U.Listen("RESURRECT_REQUEST")
+U.Listen("DAMAGE_METER_CURRENT_SESSION_UPDATED")
+U.Listen("DAMAGE_METER_COMBAT_SESSION_UPDATED")
+if events.RegisterUnitEvent then
+    pcall(events.RegisterUnitEvent, events, "UNIT_AURA", "player")
+end
 
 events:SetScript("OnEvent", function(_, event, ...)
     local arg1, arg2, arg3, arg4 = ...
@@ -4137,10 +4495,12 @@ events:SetScript("OnEvent", function(_, event, ...)
         Scan()
         U.RefreshRoster()
         C_Timer.After(2, U.Arm)
+        C_Timer.After(3, U.RefreshGeneralRoster)
         C_Timer.NewTicker(0.5, Scan)
         C_Timer.NewTicker(3, ScanCombatLog)
         C_Timer.NewTicker(0.25, Pump)
         C_Timer.NewTicker(45, ShareTick)
+        C_Timer.NewTicker(60, U.RefreshGeneralRoster)
         return
     end
     if event == "PLAYER_ENTERING_WORLD" then
@@ -4150,10 +4510,15 @@ events:SetScript("OnEvent", function(_, event, ...)
         RefreshList()
         U.RefreshRoster()
         C_Timer.After(2, U.Arm)
+        C_Timer.After(3, U.RefreshGeneralRoster)
         return
     end
     if event == "CHAT_MSG_CHANNEL" then
         NoteZone(arg2, arg4, select(9, ...), select(12, ...))
+        return
+    end
+    if event == "CHAT_MSG_YELL" then
+        U.NoteZoneWeak(arg2, select(12, ...))
         return
     end
     if event == "CHAT_MSG_SAY" or event == "CHAT_MSG_EMOTE" or event == "CHAT_MSG_TEXT_EMOTE" then
@@ -4184,6 +4549,26 @@ events:SetScript("OnEvent", function(_, event, ...)
         NoteNamed(arg1, 1, CHAT_TTL)
         return
     end
+    if event == "PARTY_INVITE_REQUEST" then
+        U.NoteZoneWeak(arg1, arg2)
+        return
+    end
+    if event == "RESURRECT_REQUEST" then
+        U.NoteNearbyNamed(arg1, arg2)
+        return
+    end
+    if event == "NAME_PLATE_UNIT_ADDED" then
+        U.OnNameplateAdded(arg1)
+        return
+    end
+    if event == "UNIT_AURA" then
+        U.OnPlayerAura(arg1, arg2)
+        return
+    end
+    if event == "CHANNEL_ROSTER_UPDATE" or event == "CHANNEL_COUNT_UPDATE" then
+        U.RefreshGeneralRoster()
+        return
+    end
     if event == "UPDATE_MOUSEOVER_UNIT"
         or event == "PLAYER_TARGET_CHANGED"
         or event == "PLAYER_FOCUS_CHANGED"
@@ -4209,6 +4594,15 @@ events:SetScript("OnEvent", function(_, event, ...)
     end
     if event == "PLAYER_REGEN_ENABLED" then
         Scan()
+        U.HarvestDamageMeter()
+        return
+    end
+    if event == "DAMAGE_METER_CURRENT_SESSION_UPDATED"
+        or event == "DAMAGE_METER_COMBAT_SESSION_UPDATED"
+    then
+        if not InCombatLockdown() then
+            U.HarvestDamageMeter()
+        end
     end
 end)
 

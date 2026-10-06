@@ -1,5 +1,11 @@
 # Social Forever — Changelog
 
+## 0.2.25 — 2026-10-06
+
+- More ways to notice people nearby: friendly nameplates you already enabled, players who buff you, resurrections, and other combat participants after a fight ends.
+- The General channel roster and yell now feed **In this zone** without counting as a real encounter.
+- Raid members in range and a few extra unit tokens are scanned the same way as party targets.
+
 ## 0.2.24 — 2026-10-06
 
 - Your own character no longer appears in the nearby list.
