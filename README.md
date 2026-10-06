@@ -45,9 +45,11 @@ Party members remain visible until they leave the group.
 
 ### In this zone
 
-Players who speak in **General** chat appear under the nearby players while they are still in your zone.
+Players who speak in **General** chat appear under the nearby players while they are still in your zone. So do people currently listed on the General channel roster, and people who yell.
 
-They remain there for **10 minutes** after speaking.
+They remain there for **10 minutes** after speaking, or while they stay on the roster.
+
+Roster-only and yell names do not raise familiarity. A real encounter (mouseover, buff, nameplate, and so on) still can.
 
 A player who is already in the Nearby section is not shown twice.
 
