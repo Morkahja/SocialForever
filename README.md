@@ -7,7 +7,7 @@ While you quest, the same players often cross your path again and again. Social 
 Over time, strangers can become familiar names.
 
 Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
-Current version: **0.2.25**
+Current version: **0.3.0**
 
 ## What it does
 
@@ -37,19 +37,19 @@ The window is split into two kinds of players.
 
 Players the addon has recently detected around you appear at the top.
 
-A nearby player normally remains on the list for **3 minutes** after the last sighting. Seeing them again refreshes that timer.
+A nearby player can stay up to **3 minutes** after the last sighting, but Social Forever also checks presence every few seconds. If the client can prove they are more than 50 yards away, they leave the list right away. If they simply stop showing up on any unit token, they leave after a short grace period (about 15–30 seconds). Seeing them again clears that and keeps them.
 
 Out in the world, moving into another subzone removes players from the previous subzone immediately. Capital cities are treated as one larger place, so walking between areas of Ironforge or Stormwind does not clear everyone from the list.
 
-Party members remain visible until they leave the group.
+Party and raid members remain while they are still in your group.
 
 ### In this zone
 
-Players who speak in **General** chat appear under the nearby players while they are still in your zone. So do people currently listed on the General channel roster, and people who yell.
+**In this zone** lists people who are on your **General** channel roster (you must be joined to General — you do not need to speak). People who speak in General, and people who yell, are added the same way.
 
 They remain there for **10 minutes** after speaking, or while they stay on the roster.
 
-Roster-only and yell names do not raise familiarity. A real encounter (mouseover, buff, nameplate, and so on) still can.
+You do not need to say anything yourself. Roster-only and yell names do not raise familiarity. A real encounter (mouseover, buff, nameplate, and so on) still can.
 
 A player who is already in the Nearby section is not shown twice.
 
@@ -100,7 +100,9 @@ Names gradually change color based on how familiar that person is compared with 
 | **Blue** | 31% to 80% |
 | **Purple** | 81% to 100% |
 
-A Green, Yellow, Red, or Kill on Sight mark overrides this familiarity color.
+Players of the other faction use a dusty war-red instead of the familiarity colors, so they read as hostile without looking like a Red mark.
+
+A Green, Yellow, Red, or Kill on Sight mark overrides familiarity and faction color.
 
 Hover over a player to see more of their history, including:
 
@@ -112,7 +114,7 @@ Hover over a player to see more of their history, including:
 - Your mark and the shared mark.
 - Any flags attached to them.
 
-Their level appears once WoW has actually reported it through your target, mouseover, or group. A chat message by itself does not reveal a player's level.
+Their level appears to the right of the name once WoW has reported it through your target, mouseover, or group. It uses that player's class color. Between the name and the level is a small icon for their race and class together (including Skyborne). A chat message by itself does not reveal a player's level.
 
 ## Marks, flags, and Kill on Sight
 
@@ -187,8 +189,8 @@ Instead, Social Forever builds the nearby list from players the game has already
 - Friendly nameplates, if you have turned them on yourself (Shift+V). Social Forever never changes that setting.
 - Someone who buffs you, when Forever still exposes the caster.
 - A resurrection cast on you.
-- Other players who showed up in the damage meter after a fight ends.
-- Party and raid members who are actually within range.
+- Other players from the **current** damage meter after a fight ends, only while they are still online and present to the client.
+- Party and raid members who are online and actually within range. Offline group members are not kept on the list.
 - Say, emotes, craft lines, duel, and trade.
 
 **In this zone** is broader and weaker. It includes people who speak in General, people currently on the General channel roster, and yell. Being on that roster alone does not count as an encounter or raise familiarity.

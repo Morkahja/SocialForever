@@ -1,5 +1,38 @@
 # Social Forever — Changelog
 
+## 0.3.0 — 2026-10-07
+
+- Same player-facing behavior. The addon code is now split into several Lua files so it is easier to maintain.
+
+## 0.2.32 — 2026-10-07
+
+- Nearby drops people sooner when they are clearly gone or stop showing up for a short while. The 3-minute timer is still the last resort.
+
+## 0.2.31 — 2026-10-07
+
+- Same detection and list behavior, with less repeated background work while you play.
+
+## 0.2.30 — 2026-10-07
+
+- **In this zone** from the General roster should work without people talking. The roster reader was still using the wrong channel id and GUID fields.
+
+## 0.2.29 — 2026-10-06
+
+- **In this zone** now fills from the General channel roster again, without waiting for someone to speak.
+
+## 0.2.28 — 2026-10-06
+
+- Players of the other faction show in a dusty war-red on the list, different from a Red mark.
+
+## 0.2.27 — 2026-10-06
+
+- Offline group members and old damage-meter names no longer keep showing up on Nearby.
+
+## 0.2.26 — 2026-10-06
+
+- Each nearby name now shows a race-and-class icon between the name and the level.
+- The level uses that player's class color. Skyborne have their own icon set.
+
 ## 0.2.25 — 2026-10-06
 
 - More ways to notice people nearby: friendly nameplates you already enabled, players who buff you, resurrections, and other combat participants after a fight ends.

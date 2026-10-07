@@ -4,6 +4,60 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.3.0 — Multi-file split
+
+- Split the former single `SocialForever.lua` into load-ordered modules: `Core`, `Memory`, `Group`, `Detection`, `Sharing`, `UI`, `Events`.
+- Shared namespace is `SocialForever` (`SF`), with `SF.Const`, `SF.State` (including former `P` as `SF.State.P`), `SF.Util`, and per-module tables. `SocialForeverDB` schema unchanged.
+- No player-facing behavior change intended; slash commands and the addon compartment still enter through `Events.lua`.
+- Pushed to GitHub without a release tag so CurseForge does not pick this build up.
+
+## 0.2.32 — Nearby presence validation
+
+- Every 5 seconds, only the current Nearby set is checked against live unit tokens (target, mouseover, soft targets, party/raid, nameplates, and the usual chains).
+- A real distance over 50 yards removes them immediately. No matching token starts a short unconfirmed window (about 18s for trackable sources, 25s for interaction sources), then they leave Nearby.
+- Missing a token is not treated as proof they left. Group members are not aged out while still grouped. Nameplate remove accelerates the stale timer without an instant drop.
+- The 3-minute TTL remains the final fallback.
+
+## 0.2.31 — Plumbing optimization pass
+
+- The 0.5s unit scan still runs, but the list only rebuilds when the displayed nearby/zone set, group status, or current target actually changes. Quiet TTL refreshes no longer repaint.
+- Fade/move OnUpdate is armed only while an animation is active, then cleared.
+- Familiarity maximum is cached and updated when nearby/zone counts rise, instead of walking the whole saved DB every refresh.
+- Damage meter harvests once per finished combat (debounced), current session only, GUID-deduped.
+- General roster events debounce to one scan; the safety refresh is every 60s. Login still loads the roster promptly.
+- Combat-log chat polling only Publishes when it finds a new player link.
+- Raid members/targets scan on a 3s ticker that exists only while you are in a raid. Group membership is a cached lookup for party and raid, so Invite hides for raid mates too.
+
+## 0.2.30 — General roster reader fixed again
+
+- You were right: after 0.2.29 it still only showed talkers.
+- Modern roster info returns `name, owner, moderator, guid`, not an 8th-slot GUID. The code was dropping GUIDs and often querying with the chat channel number instead of the ChannelFrame display index.
+- It now tries the display index and the channel number, uses the listed member count from the channel UI, and only selects General when the roster is empty so the client fills it.
+
+## 0.2.29 — General roster actually loads
+
+- **In this zone** was meant to list people on the General channel roster, not only people who talk.
+- Finding General used the wrong return from the channel API, so the roster never loaded. Speaking in General still worked.
+- General is found through the joined-channel list, then the display list, and the roster refreshes more often.
+
+## 0.2.28 — Other faction reads dusty red
+
+- Opposite-faction names use a muted dusty war-red so they stand out from your own side.
+- That color is not the bright Red mark. Green, Yellow, Red, and Kill on Sight marks still win when set.
+- Faction comes from the unit when seen; race fills it in for the classic races. Skyborne can be either side, so they need a real faction read.
+
+## 0.2.27 — No offline echoes on Nearby
+
+- Offline party or raid members were still treated as grouped, so Nearby kept refreshing their timer and never let them expire.
+- The damage meter also walked older combat sessions, and GUID name lookup works for offline characters, so yesterday's groupmate could be re-added after every fight.
+- Offline group members are dropped. Meter and GUID paths only count players the client still has as a live connected unit. Old stored meter sessions are ignored.
+
+## 0.2.26 — Race, class, and level on the list
+
+- The level sits to the right of the name in class color, instead of being glued onto the name text.
+- Between the name and the level is one icon chosen for that race and class together, including Skyborne.
+- Race and class are remembered when the client exposes them, so the icon can still show later from GUID or unit data.
+
 ## 0.2.25 — More ways to notice people
 
 - Friendly nameplates you turn on yourself can feed Nearby. Social Forever never flips that setting.
