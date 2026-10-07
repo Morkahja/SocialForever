@@ -4,6 +4,12 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.3.1 — List stability + target priority
+
+- Current player target (if present in Nearby) is pinned to the first Nearby row; pin updates on `PLAYER_TARGET_CHANGED` via existing Scan/Publish and forces a resort when the pin changes so the 3s stable-hold cannot bury them.
+- Hovering the list container, rows, Invite buttons, or scrollbar sets `S.listFrozen`; `UI.RefreshList` then marks `S.listDirty` and only refreshes target chrome. Detection keeps running underneath.
+- On mouse leave of the whole interactive area, one rebuild applies (`skipMove`) with current sort + pin. Scroll/resize while frozen repaints from `S.displayOrdered` without adopting live additions/removals.
+
 ## 0.3.0 — Multi-file split
 
 - Split the former single `SocialForever.lua` into load-ordered modules: `Core`, `Memory`, `Group`, `Detection`, `Sharing`, `UI`, `Events`.

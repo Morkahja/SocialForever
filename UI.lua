@@ -363,6 +363,42 @@ function UI.ClassRGB(classFile)
     return colors.r or 0.9, colors.g or 0.9, colors.b or 0.9
 end
 
+function UI.ClassLabel(classFile)
+    classFile = Util.NormClassFile(classFile)
+    if not classFile then
+        return nil
+    end
+    local names = LOCALIZED_CLASS_NAMES_MALE
+    if type(names) == "table" and type(names[classFile]) == "string" and names[classFile] ~= "" then
+        return names[classFile]
+    end
+    return classFile:sub(1, 1) .. classFile:sub(2):lower()
+end
+
+function UI.RaceLabel(raceFile)
+    raceFile = Util.NormRaceFile(raceFile)
+    if not raceFile then
+        return nil
+    end
+    local labels = {
+        Human = "Human",
+        Dwarf = "Dwarf",
+        NightElf = "Night Elf",
+        Gnome = "Gnome",
+        Draenei = "Draenei",
+        Orc = "Orc",
+        Troll = "Troll",
+        Tauren = "Tauren",
+        Scourge = "Undead",
+        BloodElf = "Blood Elf",
+        Skyborne = "Skyborne",
+    }
+    if labels[raceFile] then
+        return labels[raceFile]
+    end
+    return raceFile
+end
+
 function UI.ShowTip(owner, key)
     if not key then
         return
@@ -379,6 +415,28 @@ function UI.ShowTip(owner, key)
         local r, g, b = Memory.NameRGB(key, S.sightings[key] or S.zoneSeen[key] or (S.inZone and S.inZone[key]))
         GameTooltip:SetText(shown, r, g, b)
     end
+    local tipEntry = (S.nearby and S.nearby[key])
+        or (S.inZone and S.inZone[key])
+        or (S.sightings and S.sightings[key])
+        or (S.zoneSeen and S.zoneSeen[key])
+        or { key = key }
+    local classFile, raceFile, level = UI.EntryIdentity(tipEntry)
+    local className = UI.ClassLabel(classFile)
+    local raceName = UI.RaceLabel(raceFile)
+    if level or raceName or className then
+        local cr, cg, cb = UI.ClassRGB(classFile)
+        local parts = {}
+        if level then
+            parts[#parts + 1] = "Level " .. level
+        end
+        if raceName then
+            parts[#parts + 1] = raceName
+        end
+        if className then
+            parts[#parts + 1] = className
+        end
+        GameTooltip:AddLine(table.concat(parts, " "), cr, cg, cb, true)
+    end
     if Memory.FlaggedKos(key) then
         GameTooltip:AddLine("Kill on sight", 1, 0.35, 0.3, true)
     end
@@ -389,7 +447,7 @@ function UI.ShowTip(owner, key)
         end
         return n .. " times"
     end
-    GameTooltip:AddLine("Been S.nearby: " .. TimesPhrase(Memory.SeenCount(key, "nearbyTimes")), 0.8, 0.86, 1, true)
+    GameTooltip:AddLine("Been nearby: " .. TimesPhrase(Memory.SeenCount(key, "nearbyTimes")), 0.8, 0.86, 1, true)
     GameTooltip:AddLine("Been in the same zone: " .. TimesPhrase(Memory.SeenCount(key, "zoneTimes")), 0.8, 0.86, 1, true)
     local seen = S.sightings[key] or S.zoneSeen[key]
     if seen then
@@ -833,7 +891,14 @@ function UI.BuildMain()
     local list = CreateFrame("Frame", nil, S.main)
     list:SetPoint("TOPLEFT", 8, -30)
     list:SetPoint("BOTTOMRIGHT", -16, 18)
+    list:EnableMouse(true)
     list:EnableMouseWheel(true)
+    list:SetScript("OnEnter", function()
+        UI.NoteListEnter()
+    end)
+    list:SetScript("OnLeave", function()
+        UI.NoteListLeave()
+    end)
     S.main.list = list
     S.main.scroll = list
     S.main.scrollOffset = 0
@@ -865,10 +930,16 @@ function UI.BuildMain()
         end
         if nextOffset ~= S.main.scrollOffset then
             S.main.scrollOffset = nextOffset
-            if UI.RefreshList then
-                UI.RefreshList()
+            if UI.RequestListPaint then
+                UI.RequestListPaint()
             end
         end
+    end)
+    bar:SetScript("OnEnter", function()
+        UI.NoteListEnter()
+    end)
+    bar:SetScript("OnLeave", function()
+        UI.NoteListLeave()
     end)
     S.main.bar = bar
 
@@ -906,8 +977,8 @@ function UI.BuildMain()
             return
         end
         S.main.scrollOffset = nextOffset
-        if UI.RefreshList then
-            UI.RefreshList()
+        if UI.RequestListPaint then
+            UI.RequestListPaint()
         end
     end
     S.main.ScrollBy = ScrollBy
@@ -948,6 +1019,7 @@ function UI.BuildMain()
             UI.PaintInvite(self)
         end)
         invite:SetScript("OnEnter", function(self)
+            UI.NoteListEnter()
             local state = self.key and S.inviteState[self.key]
             if state == "declined" then
                 self:SetBackdropColor(0.45, 0.1, 0.1, 1)
@@ -973,6 +1045,7 @@ function UI.BuildMain()
         invite:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
             UI.PaintInvite(self)
+            UI.NoteListLeave()
         end)
         row.invite = invite
 
@@ -1047,6 +1120,7 @@ function UI.BuildMain()
         end
 
         row:SetScript("OnEnter", function(self)
+            UI.NoteListEnter()
             if not self.key then
                 return
             end
@@ -1056,6 +1130,7 @@ function UI.BuildMain()
         end)
         row:SetScript("OnLeave", function(self)
             self.highlight:Hide()
+            UI.NoteListLeave()
             local token = S.tipToken
             C_Timer.After(0, function()
                 if token ~= S.tipToken then
@@ -1133,8 +1208,12 @@ function UI.BuildMain()
     end)
 
     S.main:SetScript("OnSizeChanged", function()
-        if SF.db and UI.RefreshList and S.main.rows then
-            UI.RefreshList()
+        if SF.db and S.main.rows then
+            if UI.RequestListPaint then
+                UI.RequestListPaint()
+            elseif UI.RefreshList then
+                UI.RefreshList()
+            end
         end
     end)
 
@@ -1168,6 +1247,10 @@ function UI.OnMainAnimUpdate()
         end
         return
     end
+    -- While the mouse is over the list, keep row identity stable — pause visual mutates.
+    if S.listFrozen then
+        return
+    end
     local now = GetTime()
     local finished = false
     for _, row in ipairs(S.main.rows) do
@@ -1199,6 +1282,105 @@ function UI.OnMainAnimUpdate()
     end
     if not UI.AnimActive() then
         S.main:SetScript("OnUpdate", nil)
+    end
+end
+
+function UI.IsListHovered()
+    if not S.main then
+        return false
+    end
+    if S.main.list and S.main.list:IsMouseOver() then
+        return true
+    end
+    if S.main.bar and S.main.bar:IsShown() and S.main.bar:IsMouseOver() then
+        return true
+    end
+    if S.main.rows then
+        for i = 1, #S.main.rows do
+            local row = S.main.rows[i]
+            if row:IsShown() then
+                if row:IsMouseOver() then
+                    return true
+                end
+                if row.invite and row.invite:IsShown() and row.invite:IsMouseOver() then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+function UI.PaintTargetHighlightsOnly()
+    if not S.main or not S.main.rows then
+        return
+    end
+    local targetKey = Util.UnitIdentity("target")
+    for i = 1, #S.main.rows do
+        local row = S.main.rows[i]
+        if row:IsShown() and row.key and row.PaintTarget then
+            row:PaintTarget(Util.SameKey(row.key, targetKey))
+        end
+    end
+end
+
+function UI.SetListFrozen(frozen)
+    if frozen then
+        if S.listFrozen then
+            return
+        end
+        S.listFrozen = true
+        return
+    end
+    if not S.listFrozen then
+        return
+    end
+    S.listFrozen = false
+    if S.listDirty then
+        S.listDirty = false
+        UI.RefreshList({ force = true, skipMove = true })
+    end
+end
+
+function UI.NoteListEnter()
+    UI.SetListFrozen(true)
+end
+
+function UI.NoteListLeave()
+    C_Timer.After(0, function()
+        if not UI.IsListHovered() then
+            UI.SetListFrozen(false)
+        end
+    end)
+end
+
+function UI.PinNearbyTarget(list)
+    local targetKey = Util.UnitIdentity("target")
+    if not targetKey or Util.IsMe(targetKey) then
+        return nil
+    end
+    local idx
+    for i = 1, #list do
+        if Util.SameKey(list[i].key, targetKey) then
+            idx = i
+            break
+        end
+    end
+    if not idx then
+        return nil
+    end
+    if idx ~= 1 then
+        local entry = table.remove(list, idx)
+        table.insert(list, 1, entry)
+    end
+    return list[1].key
+end
+
+function UI.RequestListPaint()
+    if S.listFrozen then
+        UI.RefreshList({ scrollOnly = true })
+    else
+        UI.RefreshList()
     end
 end
 
@@ -1331,11 +1513,37 @@ function UI.HoldLeavingRows(ordered, now)
     return merged
 end
 
-function UI.RefreshList()
+function UI.RefreshList(opts)
+    if type(opts) ~= "table" then
+        opts = nil
+    end
+    local force = opts and opts.force
+    local scrollOnly = opts and opts.scrollOnly
+    local skipMove = opts and opts.skipMove
+
+    if S.listFrozen and not force and not scrollOnly then
+        S.listDirty = true
+        UI.PaintTargetHighlightsOnly()
+        return
+    end
+
     if not S.main or not SF.db or S.main.fadingPaint then
         return
     end
     S.main.fadingPaint = true
+
+    local ordered
+    local zoneList
+    local nearCount = 0
+
+    if scrollOnly and S.displayOrdered then
+        ordered = S.displayOrdered
+        zoneList = {}
+        nearCount = S.displayNearCount or 0
+        for _ = 1, S.displayZoneCount or 0 do
+            zoneList[#zoneList + 1] = true
+        end
+    else
     local function SortSection(list, useYards)
         local hereZone = Memory.CurrentZone()
         local here = useYards and Memory.CurrentArea() or nil
@@ -1405,12 +1613,11 @@ function UI.RefreshList()
         end)
     end
 
-    local maxSeen = Memory.MaxFamiliarity()
     local nearList = {}
     for _, entry in pairs(S.nearby) do
         nearList[#nearList + 1] = entry
     end
-    local zoneList = {}
+    zoneList = {}
     for _, entry in pairs(S.inZone) do
         zoneList[#zoneList + 1] = entry
     end
@@ -1427,39 +1634,58 @@ function UI.RefreshList()
         for i = 1, #list do
             byKey[list[i].key] = list[i]
         end
-        local ordered = {}
+        local stable = {}
         local used = {}
         for i = 1, #previous do
             local entry = byKey[previous[i]]
             if entry then
-                ordered[#ordered + 1] = entry
+                stable[#stable + 1] = entry
                 used[entry.key] = true
             end
         end
         for i = 1, #list do
             local entry = list[i]
             if not used[entry.key] then
-                ordered[#ordered + 1] = entry
+                stable[#stable + 1] = entry
             end
         end
-        return ordered
+        return stable
     end
 
+    local targetKey = Util.UnitIdentity("target")
+    if targetKey and Util.IsMe(targetKey) then
+        targetKey = nil
+    end
+    local pinKey = nil
+    if targetKey then
+        for i = 1, #nearList do
+            if Util.SameKey(nearList[i].key, targetKey) then
+                pinKey = nearList[i].key
+                break
+            end
+        end
+    end
+    local pinChanged = (pinKey or false) ~= (S.pinnedNearKey or false)
+    S.pinnedNearKey = pinKey
+
     local now = GetTime()
-    if now - (S.sortHold.at or 0) >= C.SORT_EVERY then
+    if pinChanged or now - (S.sortHold.at or 0) >= C.SORT_EVERY then
         SortSection(nearList, true)
         SortSection(zoneList, false)
         S.sortHold.at = now
-        S.sortHold.near = KeysOf(nearList)
         S.sortHold.zone = KeysOf(zoneList)
     else
         nearList = StableOrder(nearList, S.sortHold.near)
         zoneList = StableOrder(zoneList, S.sortHold.zone)
     end
+    if pinKey then
+        UI.PinNearbyTarget(nearList)
+    end
+    S.sortHold.near = KeysOf(nearList)
 
-    local ordered = {}
+    ordered = {}
     if #nearList == 0 and #zoneList > 0 then
-        ordered[#ordered + 1] = { header = "No one S.nearby", dim = true }
+        ordered[#ordered + 1] = { header = "No one nearby", dim = true }
     end
     for i = 1, #nearList do
         if #ordered >= C.MAX_ROWS then
@@ -1545,38 +1771,53 @@ function UI.RefreshList()
         end
     end
 
-    if S.moveWave and (now - S.moveWave) >= (C.MOVE_HALF * 2) then
+    if skipMove then
+        S.moveWave = nil
+        wipe(S.moveKeys)
+        S.moveHeld = nil
+    elseif S.moveWave and (now - S.moveWave) >= (C.MOVE_HALF * 2) then
         S.moveWave = nil
         wipe(S.moveKeys)
         S.moveHeld = nil
     end
-    if S.moveWave and S.moveHeld and (now - S.moveWave) < C.MOVE_HALF then
-        ordered = HeldDisplay(S.moveHeld, ordered)
-        HideUnshown(ordered)
-    elseif S.moveWave and S.moveHeld then
-        S.moveHeld = nil
-    elseif not S.moveWave and S.lastShown then
-        local oldSlots = Slots(S.lastShown)
-        local newSlots = Slots(ordered)
-        local keys = {}
-        local changed = false
-        for key, index in pairs(newSlots) do
-            local prev = oldSlots[key]
-            if prev and prev ~= index and not S.fadeOutAt[key] and not S.fadeInAt[key] then
-                changed = true
-                keys[key] = true
-            end
-        end
-        if changed then
-            S.moveWave = now
-            S.moveKeys = keys
-            S.moveHeld = CopySnap(S.lastShown)
+    if not skipMove then
+        if S.moveWave and S.moveHeld and (now - S.moveWave) < C.MOVE_HALF then
             ordered = HeldDisplay(S.moveHeld, ordered)
             HideUnshown(ordered)
+        elseif S.moveWave and S.moveHeld then
+            S.moveHeld = nil
+        elseif not S.moveWave and S.lastShown then
+            local oldSlots = Slots(S.lastShown)
+            local newSlots = Slots(ordered)
+            local keys = {}
+            local changed = false
+            for key, index in pairs(newSlots) do
+                local prev = oldSlots[key]
+                if prev and prev ~= index and not S.fadeOutAt[key] and not S.fadeInAt[key] then
+                    changed = true
+                    keys[key] = true
+                end
+            end
+            if changed then
+                S.moveWave = now
+                S.moveKeys = keys
+                S.moveHeld = CopySnap(S.lastShown)
+                ordered = HeldDisplay(S.moveHeld, ordered)
+                HideUnshown(ordered)
+            end
         end
     end
     S.lastShown = CopySnap(ordered)
+    S.displayOrdered = ordered
+    nearCount = 0
+    for _ in pairs(S.nearby) do
+        nearCount = nearCount + 1
+    end
+    S.displayNearCount = nearCount
+    S.displayZoneCount = #zoneList
+    end -- full rebuild (not scrollOnly)
 
+    local maxSeen = Memory.MaxFamiliarity()
     local viewWidth = S.main.list:GetWidth()
     if not viewWidth or viewWidth < 40 then
         viewWidth = C.FRAME_WIDTH - 28
@@ -1727,10 +1968,6 @@ function UI.RefreshList()
         end
     end
 
-    local nearCount = 0
-    for _ in pairs(S.nearby) do
-        nearCount = nearCount + 1
-    end
     local place = Memory.CurrentArea() or "Nearby"
     if nearCount == 0 and #zoneList == 0 and #ordered == 0 then
         S.main.title:SetText(place)

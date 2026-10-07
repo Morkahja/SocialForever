@@ -122,6 +122,12 @@ S.main = nil
 S.popup = nil
 S.menu = nil
 S.settingsMenu = nil
+S.listFrozen = false
+S.listDirty = false
+S.pinnedNearKey = nil
+S.displayOrdered = nil
+S.displayNearCount = 0
+S.displayZoneCount = 0
 -- Plumbing state bundled to stay under the chunk local limit.
 S.P = {
     publishSig = nil,

@@ -1,5 +1,11 @@
 # Social Forever — Changelog
 
+## 0.3.1 — 2026-10-07
+
+- Your current target stays at the top of Nearby while you have them targeted.
+- The Nearby list no longer jumps around while your mouse is over it — invites and clicks stay on the same person until you move away.
+- Player tooltips show level, race, and class.
+
 ## 0.3.0 — 2026-10-07
 
 - Same player-facing behavior. The addon code is now split into several Lua files so it is easier to maintain.
