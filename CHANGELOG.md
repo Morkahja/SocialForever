@@ -1,5 +1,10 @@
 # Social Forever — Changelog
 
+## 0.3.2 — 2026-10-07
+
+- Marks, clear mark, and Kill on sight update that player's color and letter on the list right away, even while your mouse is over it.
+- After you leave the list, sorting and normal updates continue as usual.
+
 ## 0.3.1 — 2026-10-07
 
 - Your current target stays at the top of Nearby while you have them targeted.

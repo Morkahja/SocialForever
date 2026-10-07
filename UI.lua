@@ -1324,6 +1324,57 @@ function UI.PaintTargetHighlightsOnly()
     end
 end
 
+-- Update mark letter/colors (and invite block state) for one player without
+-- reordering rows. Safe while the list is frozen or in combat for font colors.
+function UI.PaintRowAppearance(key)
+    key = Util.SafeKey(key)
+    if not key or not S.main or not S.main.rows then
+        return
+    end
+    local entry = (S.nearby and S.nearby[key])
+        or (S.inZone and S.inZone[key])
+        or (S.sightings and S.sightings[key])
+        or (S.zoneSeen and S.zoneSeen[key])
+        or { key = key }
+    local color = Memory.GeneralColor(key)
+    local kos = Memory.FlaggedKos(key)
+    local letter = color == "green" and "G" or color == "yellow" and "Y" or color == "red" and "R" or "-"
+    if not color and kos then
+        letter = "K"
+    end
+    local mr, mg, mb, nr, ng, nb
+    if color then
+        local rgb = C.COLOR_RGB[color]
+        mr, mg, mb = rgb[1], rgb[2], rgb[3]
+        nr, ng, nb = mr, mg, mb
+    elseif kos then
+        mr, mg, mb = 1, 0.3, 0.25
+        nr, ng, nb = 1, 0.45, 0.35
+    else
+        mr, mg, mb = 0.45, 0.45, 0.45
+        nr, ng, nb = Memory.NameRGB(key, entry, Memory.MaxFamiliarity())
+    end
+    local locked = InCombatLockdown()
+    for i = 1, #S.main.rows do
+        local row = S.main.rows[i]
+        if row:IsShown() and row.key and Util.SameKey(row.key, key) then
+            if row.mark then
+                row.mark:SetText(letter)
+                row.mark:SetTextColor(mr, mg, mb)
+            end
+            if row.name then
+                row.name:SetTextColor(nr, ng, nb)
+            end
+            if row.invite then
+                if not locked then
+                    UI.ApplyInvite(row.invite, key)
+                end
+                UI.PaintInvite(row.invite)
+            end
+        end
+    end
+end
+
 function UI.SetListFrozen(frozen)
     if frozen then
         if S.listFrozen then
@@ -1336,8 +1387,10 @@ function UI.SetListFrozen(frozen)
         return
     end
     S.listFrozen = false
-    if S.listDirty then
-        S.listDirty = false
+    -- Always rebuild once on leave so deferred detection/sort/mark order catch up,
+    -- even if only appearance paints ran while frozen.
+    S.listDirty = false
+    if UI.RefreshList then
         UI.RefreshList({ force = true, skipMove = true })
     end
 end
@@ -1352,6 +1405,13 @@ function UI.NoteListLeave()
             UI.SetListFrozen(false)
         end
     end)
+end
+
+-- Marks/KOS change sort priority; expire the stable-hold so the next rebuild reorders.
+function UI.InvalidateListSort()
+    if S.sortHold then
+        S.sortHold.at = 0
+    end
 end
 
 function UI.PinNearbyTarget(list)
@@ -1527,7 +1587,12 @@ function UI.RefreshList(opts)
         return
     end
 
-    if not S.main or not SF.db or S.main.fadingPaint then
+    if not S.main or not SF.db then
+        return
+    end
+    if S.main.fadingPaint then
+        -- Do not drop a publish/mark update that arrived mid-paint.
+        S.listDirty = true
         return
     end
     S.main.fadingPaint = true
@@ -1871,7 +1936,34 @@ function UI.RefreshList(opts)
             if row.PaintTarget then
                 row:PaintTarget(row:IsShown() and IsTarget(row.key))
             end
-            -- Leave the secure buttons as they were. Moving them in combat is blocked.
+            -- Secure attrs stay put in combat; mark/name colors can still refresh.
+            if row:IsShown() and row.key then
+                local color = Memory.GeneralColor(row.key)
+                local kos = Memory.FlaggedKos(row.key)
+                local letter = color == "green" and "G" or color == "yellow" and "Y" or color == "red" and "R" or "-"
+                if not color and kos then
+                    letter = "K"
+                end
+                if color then
+                    local rgb = C.COLOR_RGB[color]
+                    row.mark:SetText(letter)
+                    row.mark:SetTextColor(rgb[1], rgb[2], rgb[3])
+                    row.name:SetTextColor(rgb[1], rgb[2], rgb[3])
+                elseif kos then
+                    row.mark:SetText(letter)
+                    row.mark:SetTextColor(1, 0.3, 0.25)
+                    row.name:SetTextColor(1, 0.45, 0.35)
+                else
+                    local live = (S.nearby and S.nearby[row.key])
+                        or (S.inZone and S.inZone[row.key])
+                        or { key = row.key }
+                    local r, g, b = Memory.NameRGB(row.key, live, maxSeen)
+                    row.mark:SetText(letter)
+                    row.mark:SetTextColor(0.45, 0.45, 0.45)
+                    row.name:SetTextColor(r, g, b)
+                end
+                UI.PaintInvite(row.invite)
+            end
         elseif i <= visible and entry and entry.header then
             row:SetHeight(rowH)
             row:ClearAllPoints()
@@ -2022,6 +2114,19 @@ function UI.RefreshList(opts)
         UI.KickAnimUpdate()
     end
     S.main.fadingPaint = false
+    -- A refresh was requested while this paint was running — run one more pass.
+    if S.listDirty and not S.listFrozen then
+        S.listDirty = false
+        C_Timer.After(0, function()
+            if S.listFrozen or not UI.RefreshList then
+                if S.listFrozen then
+                    S.listDirty = true
+                end
+                return
+            end
+            UI.RefreshList()
+        end)
+    end
 end
 
 function UI.BuildMenu()
@@ -2083,6 +2188,10 @@ function UI.BuildMenu()
     end)
     S.menu:SetScript("OnShow", function(self)
         self.seenUp = false
+    end)
+    S.menu:SetScript("OnHide", function()
+        -- Menu often sits over the list; re-check freeze so normal updates resume.
+        UI.NoteListLeave()
     end)
     S.menu:SetScript("OnUpdate", function(self)
         if not self:IsShown() then

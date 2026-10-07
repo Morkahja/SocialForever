@@ -387,8 +387,14 @@ function Memory.ToggleKos(key)
         rec.kos = true
     end
     Memory.Touch(rec)
+    if UI.InvalidateListSort then
+        UI.InvalidateListSort()
+    end
     if UI.RefreshList then
         UI.RefreshList()
+    end
+    if UI.PaintRowAppearance then
+        UI.PaintRowAppearance(key)
     end
 end
 
@@ -407,8 +413,14 @@ function Memory.SetColor(key, color)
     if Sharing.ShareSubject then
         Sharing.ShareSubject(key)
     end
+    if UI.InvalidateListSort then
+        UI.InvalidateListSort()
+    end
     if UI.RefreshList then
         UI.RefreshList()
+    end
+    if UI.PaintRowAppearance then
+        UI.PaintRowAppearance(key)
     end
 end
 
@@ -435,6 +447,9 @@ function Memory.ToggleFlag(key, flag)
     end
     if UI.RefreshList then
         UI.RefreshList()
+    end
+    if UI.PaintRowAppearance then
+        UI.PaintRowAppearance(key)
     end
     if UI.OpenMenu and S.menu and S.menu:IsShown() and S.menu.key == key then
         UI.OpenMenu(key, true)
@@ -470,6 +485,12 @@ function Memory.AddCustomFlag(key, text)
     Memory.Touch(rec)
     if Sharing.ShareSubject then
         Sharing.ShareSubject(key)
+    end
+    if UI.RefreshList then
+        UI.RefreshList()
+    end
+    if UI.PaintRowAppearance then
+        UI.PaintRowAppearance(key)
     end
     if UI.OpenMenu then
         UI.OpenMenu(key, true)

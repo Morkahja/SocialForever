@@ -4,6 +4,11 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.3.2 — Immediate mark paint while frozen
+
+- `UI.PaintRowAppearance(key)` refreshes mark letter/colors (and invite block) for one row without reordering; called from SetColor / ToggleKos / flags after RefreshList.
+- Leaving the list always force-rebuilds once so deferred detection/sort catch up; mark/KOS invalidates the 3s stable-sort hold; menu hide re-checks freeze; mid-paint RefreshList sets listDirty instead of dropping the update.
+
 ## 0.3.1 — List stability + target priority
 
 - Current player target (if present in Nearby) is pinned to the first Nearby row; pin updates on `PLAYER_TARGET_CHANGED` via existing Scan/Publish and forces a resort when the pin changes so the 3s stable-hold cannot bury them.
