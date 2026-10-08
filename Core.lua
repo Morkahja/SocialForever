@@ -23,20 +23,30 @@ C.ADDON = "SocialForever"
 C.PREFIX = "SocialForever"
 C.VISIBLE_ROWS = 5
 C.ROW_HEIGHT = 24
-C.MAX_ROWS = 40
+-- How many player rows the list can hold (Nearby or Zone tab). Zone still
+-- harvests up to 200 from General, then keeps the best 100 after sorting.
+C.MAX_ROWS = 100
+C.ZONE_LIST_PLUS = 100
 C.FRAME_WIDTH = 280
-C.FRAME_HEIGHT = 196
+C.FRAME_HEIGHT = 220
 C.MAX_YARDS = 50
 C.SEEN_TTL = 180
 C.SORT_EVERY = 3
 C.ZONE_TTL = 600
+-- After a zone change, keep other-zone names at least this long before purging.
 C.ZONE_PURGE_DELAY = 30
+-- After a subzone/area change outdoors, keep prior-area names at least this long.
+C.AREA_PURGE_DELAY = 15
 C.CHAT_TTL = C.SEEN_TTL
 C.UNIT_TTL = C.SEEN_TTL
-C.EMPTY_TEXT = "No one nearby yet, and no one has spoken in General."
+C.EMPTY_NEARBY = "No one nearby"
+C.EMPTY_ZONE = "No one else listed in this zone yet."
+C.EMPTY_TEXT = C.EMPTY_NEARBY
 C.MAX_ORIGINS = 12
 C.MAX_SHARE = 8
 C.HELLO_GAP = 300
+C.SAME_MOB_COOLDOWN = 300
+C.SAME_MOB_NEARBY_GRACE = 60
 
 C.PRESET_FLAGS = {
     "Really friendly",
@@ -116,6 +126,8 @@ S.moveHeld = nil
 S.lastShown = nil
 S.trackedZone = nil
 S.zonePurgeAt = nil
+S.trackedArea = nil
+S.areaPurgeAt = nil
 S.friendNames = {}
 S.combatLogSeen = 0
 S.main = nil
@@ -128,6 +140,10 @@ S.pinnedNearKey = nil
 S.displayOrdered = nil
 S.displayNearCount = 0
 S.displayZoneCount = 0
+S.listTab = "nearby"
+S.sameMobInviteAt = {}
+S.sameMobQueue = {}
+S.sameMobPopup = nil
 -- Plumbing state bundled to stay under the chunk local limit.
 S.P = {
     publishSig = nil,
@@ -139,10 +155,13 @@ S.P = {
     harvestedGen = nil,
     meterPending = false,
     rosterPending = false,
+    zoneRosterFull = false,
     shareRotate = 1,
     nameplateByUnit = {},
     staleTrackable = 18,
     staleInteraction = 25,
+    sameMobApiInvite = nil,
+    sameMobStamp = nil,
 }
 
 C.LOOK_UNITS = {
@@ -614,6 +633,19 @@ function Util.InitDB()
     end
     if type(db.ignored) ~= "table" then
         db.ignored = {}
+    end
+    if db.listTab ~= "nearby" and db.listTab ~= "zone" then
+        db.listTab = "nearby"
+    end
+    S.listTab = db.listTab
+    if db.sameMobAsk ~= true then
+        db.sameMobAsk = false
+    end
+    if db.sameMobAutoInvite ~= true then
+        db.sameMobAutoInvite = false
+    end
+    if db.sameMobAsk and db.sameMobAutoInvite then
+        db.sameMobAutoInvite = false
     end
     if not db.migratedIgnoreFlags then
         local hasIgnoredName = false

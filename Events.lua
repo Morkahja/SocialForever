@@ -17,6 +17,7 @@ local UI = SF.UI
 SF.UI.BuildMain()
 SF.UI.BuildMenu()
 SF.UI.BuildPopup()
+SF.UI.BuildSameMobPopup()
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")

@@ -139,12 +139,12 @@ end
 
 function UI.ApplyMacro(button, macro, anyClick)
     if not button or InCombatLockdown() then
-        return
+        return false
     end
     macro = macro or ""
     local stamp = macro .. (anyClick and ":any" or ":left")
     if button.lastMacro == stamp then
-        return
+        return true
     end
     button.lastMacro = stamp
     button:SetAttribute("*type1", nil)
@@ -154,7 +154,7 @@ function UI.ApplyMacro(button, macro, anyClick)
     button:SetAttribute("type1", nil)
     button:SetAttribute("macrotext1", nil)
     if macro == "" then
-        return
+        return true
     end
     button:SetAttribute("type1", "macro")
     button:SetAttribute("macrotext1", macro)
@@ -162,10 +162,80 @@ function UI.ApplyMacro(button, macro, anyClick)
         button:SetAttribute("type", "macro")
         button:SetAttribute("macrotext", macro)
     end
+    return true
 end
 
 function UI.ApplyTarget(row, key)
-    UI.ApplyMacro(row, UI.TargetMacro(key), false)
+    if UI.ApplyMacro(row, UI.TargetMacro(key), false) then
+        row.secureKey = key
+    end
+end
+
+-- Blocks secure target/invite clicks when the visible name no longer matches
+-- the macros (common for new rows that appear during combat).
+function UI.EnsureCombatShield(row)
+    if not row then
+        return nil
+    end
+    if row.combatShield then
+        return row.combatShield
+    end
+    local shield = CreateFrame("Button", nil, row)
+    shield:SetAllPoints(row)
+    shield:SetFrameLevel((row:GetFrameLevel() or 1) + 25)
+    shield:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    shield:Hide()
+    shield:SetScript("OnEnter", function(self)
+        local owner = self:GetParent()
+        UI.NoteListEnter()
+        if not owner or not owner.key then
+            return
+        end
+        S.tipToken = S.tipToken + 1
+        if owner.highlight then
+            owner.highlight:Show()
+        end
+        UI.ShowTip(owner, owner.key)
+    end)
+    shield:SetScript("OnLeave", function(self)
+        local owner = self:GetParent()
+        if owner and owner.highlight then
+            owner.highlight:Hide()
+        end
+        UI.NoteListLeave()
+        local token = S.tipToken
+        C_Timer.After(0, function()
+            if token ~= S.tipToken then
+                return
+            end
+            if owner and not owner:IsMouseOver() and not (owner.combatShield and owner.combatShield:IsMouseOver()) then
+                GameTooltip:Hide()
+            end
+        end)
+    end)
+    shield:SetScript("OnClick", function(self, button)
+        local owner = self:GetParent()
+        if button == "RightButton" and owner and owner.key then
+            GameTooltip:Hide()
+            UI.OpenMenu(owner.key)
+        end
+    end)
+    row.combatShield = shield
+    return shield
+end
+
+function UI.SetCombatDisplayOnly(row, displayOnly)
+    if not row then
+        return
+    end
+    local shield = UI.EnsureCombatShield(row)
+    if displayOnly then
+        if shield then
+            shield:Show()
+        end
+    elseif shield then
+        shield:Hide()
+    end
 end
 
 function UI.SlashName(key)
@@ -246,7 +316,9 @@ end
 function UI.ApplyInvite(button, key)
     local blocked = (not key) or Group.InMyGroup(key) or Memory.IsBlocked(key) or Memory.FlaggedKos(key)
     local macro = (not blocked) and UI.InviteMacro(key) or nil
-    UI.ApplyMacro(button, macro, true)
+    if UI.ApplyMacro(button, macro, true) then
+        button.secureKey = key
+    end
 end
 
 function UI.InviteKey(key)
@@ -311,6 +383,9 @@ function UI.ApplyBackground()
     end
     if S.popup then
         S.popup:SetBackdropColor(0.04, 0.04, 0.04, alpha)
+    end
+    if S.sameMobPopup then
+        S.sameMobPopup:SetBackdropColor(0.04, 0.04, 0.04, alpha)
     end
 end
 
@@ -448,7 +523,6 @@ function UI.ShowTip(owner, key)
         return n .. " times"
     end
     GameTooltip:AddLine("Been nearby: " .. TimesPhrase(Memory.SeenCount(key, "nearbyTimes")), 0.8, 0.86, 1, true)
-    GameTooltip:AddLine("Been in the same zone: " .. TimesPhrase(Memory.SeenCount(key, "zoneTimes")), 0.8, 0.86, 1, true)
     local seen = S.sightings[key] or S.zoneSeen[key]
     if seen then
         local ago = GetTime() - (seen.at or GetTime())
@@ -568,8 +642,8 @@ function UI.ApplySize()
     if w < 230 then
         w = 230
     end
-    if h < 150 then
-        h = 150
+    if h < 170 then
+        h = 170
     end
     S.main:SetSize(w, h)
 end
@@ -617,7 +691,7 @@ function UI.BuildMain()
     S.main:SetMovable(true)
     S.main:SetResizable(true)
     if S.main.SetResizeBounds then
-        S.main:SetResizeBounds(230, 150, 680, 900)
+        S.main:SetResizeBounds(230, 170, 680, 900)
     end
     S.main:EnableMouse(true)
     UI.Chrome(S.main)
@@ -639,15 +713,6 @@ function UI.BuildMain()
         UI.SavePosition()
     end)
 
-    local title = S.main:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", 28, -8)
-    title:SetPoint("RIGHT", S.main, "RIGHT", -52, 0)
-    title:SetJustifyH("LEFT")
-    title:SetWordWrap(false)
-    title:SetText("Nearby")
-    title:SetTextColor(1, 0.82, 0.25)
-    S.main.title = title
-
     local settings = CreateFrame("Button", nil, S.main, "BackdropTemplate")
     settings:SetSize(18, 18)
     settings:SetPoint("TOPRIGHT", -26, -6)
@@ -663,7 +728,7 @@ function UI.BuildMain()
         self:SetBackdropColor(0.24, 0.20, 0.08, 0.98)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Settings", 1, 0.82, 0.25)
-        GameTooltip:AddLine("Auto-invite, name size, and background.", 0.9, 0.9, 0.9, true)
+        GameTooltip:AddLine("Grouping, name size, and background.", 0.9, 0.9, 0.9, true)
         GameTooltip:Show()
     end)
     settings:SetScript("OnLeave", function(self)
@@ -674,7 +739,7 @@ function UI.BuildMain()
 
     local panel = CreateFrame("Frame", "SocialForeverSettings", UIParent, "BackdropTemplate")
     panel:SetFrameStrata("DIALOG")
-    panel:SetSize(168, 228)
+    panel:SetSize(176, 348)
     panel:SetClampedToScreen(true)
     panel:EnableMouse(true)
     panel:Hide()
@@ -683,7 +748,7 @@ function UI.BuildMain()
 
     local function MenuRow(y, clickable)
         local button = CreateFrame("Button", nil, panel)
-        button:SetSize(152, 18)
+        button:SetSize(160, 18)
         button:SetPoint("TOPLEFT", 8, y)
         local label = button:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         label:SetPoint("LEFT", 4, 0)
@@ -708,21 +773,34 @@ function UI.BuildMain()
     autoHead.label:SetTextColor(0.75, 0.68, 0.4)
     local autoOn = MenuRow(-46, true)
     local autoOff = MenuRow(-64, true)
-    local sizeHead = MenuRow(-88, false)
+    local sameHead = MenuRow(-88, false)
+    sameHead.label:SetText("Same-mob grouping")
+    sameHead.label:SetTextColor(0.75, 0.68, 0.4)
+    local askHead = MenuRow(-106, false)
+    askHead.label:SetText("Ask before inviting")
+    askHead.label:SetTextColor(0.65, 0.65, 0.65)
+    local askOn = MenuRow(-124, true)
+    local askOff = MenuRow(-142, true)
+    local sameAutoHead = MenuRow(-166, false)
+    sameAutoHead.label:SetText("Auto-invite")
+    sameAutoHead.label:SetTextColor(0.65, 0.65, 0.65)
+    local sameAutoOn = MenuRow(-184, true)
+    local sameAutoOff = MenuRow(-202, true)
+    local sizeHead = MenuRow(-226, false)
     sizeHead.label:SetText("Name size")
     sizeHead.label:SetTextColor(0.75, 0.68, 0.4)
-    local size16 = MenuRow(-106, true)
-    local size18 = MenuRow(-124, true)
-    local size20 = MenuRow(-142, true)
-    local opacityHead = MenuRow(-166, false)
+    local size16 = MenuRow(-244, true)
+    local size18 = MenuRow(-262, true)
+    local size20 = MenuRow(-280, true)
+    local opacityHead = MenuRow(-304, false)
     opacityHead.label:SetText("Background")
     opacityHead.label:SetTextColor(0.75, 0.68, 0.4)
     local opacityValue = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     opacityValue:SetPoint("RIGHT", opacityHead, "RIGHT", -4, 0)
     opacityValue:SetTextColor(0.9, 0.9, 0.9)
     local slider = CreateFrame("Slider", nil, panel, "BackdropTemplate")
-    slider:SetPoint("TOPLEFT", 18, -188)
-    slider:SetSize(132, 16)
+    slider:SetPoint("TOPLEFT", 18, -326)
+    slider:SetSize(140, 16)
     slider:SetOrientation("HORIZONTAL")
     slider:SetMinMaxValues(15, 100)
     if slider.SetValueStep then
@@ -775,9 +853,15 @@ function UI.BuildMain()
 
     local function PaintSettingsMenu()
         local auto = Group.FriendsAutoOn()
+        local ask = Group.SameMobAskOn and Group.SameMobAskOn()
+        local sameAuto = Group.SameMobAutoOn and Group.SameMobAutoOn()
         local size = Util.NameSize()
         PaintSettingsChoice(autoOn, auto, "On")
         PaintSettingsChoice(autoOff, not auto, "Off")
+        PaintSettingsChoice(askOn, ask, "On")
+        PaintSettingsChoice(askOff, not ask, "Off")
+        PaintSettingsChoice(sameAutoOn, sameAuto, "On")
+        PaintSettingsChoice(sameAutoOff, not sameAuto, "Off")
         PaintSettingsChoice(size16, size == 16, "16")
         PaintSettingsChoice(size18, size == 18, "18")
         PaintSettingsChoice(size20, size == 20, "20")
@@ -795,6 +879,10 @@ function UI.BuildMain()
     end
     LeaveChoice(autoOn)
     LeaveChoice(autoOff)
+    LeaveChoice(askOn)
+    LeaveChoice(askOff)
+    LeaveChoice(sameAutoOn)
+    LeaveChoice(sameAutoOff)
     LeaveChoice(size16)
     LeaveChoice(size18)
     LeaveChoice(size20)
@@ -811,6 +899,30 @@ function UI.BuildMain()
             return
         end
         SF.db.autoInviteFriends = false
+        PaintSettingsMenu()
+    end)
+    askOn:SetScript("OnClick", function()
+        if Group.SetSameMobAsk then
+            Group.SetSameMobAsk(true)
+        end
+        PaintSettingsMenu()
+    end)
+    askOff:SetScript("OnClick", function()
+        if Group.SetSameMobAsk then
+            Group.SetSameMobAsk(false)
+        end
+        PaintSettingsMenu()
+    end)
+    sameAutoOn:SetScript("OnClick", function()
+        if Group.SetSameMobAuto then
+            Group.SetSameMobAuto(true)
+        end
+        PaintSettingsMenu()
+    end)
+    sameAutoOff:SetScript("OnClick", function()
+        if Group.SetSameMobAuto then
+            Group.SetSameMobAuto(false)
+        end
         PaintSettingsMenu()
     end)
     local function PickSize(size)
@@ -882,30 +994,66 @@ function UI.BuildMain()
         GameTooltip:Hide()
     end)
 
+    local function MakeTab(id)
+        local tab = CreateFrame("Button", nil, S.main, "BackdropTemplate")
+        tab:SetHeight(20)
+        tab:SetBackdrop(C.FLAT_BACKDROP)
+        tab:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+        tab:SetBackdropBorderColor(0.45, 0.38, 0.16, 0.9)
+        local label = tab:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        label:SetPoint("LEFT", 6, 0)
+        label:SetPoint("RIGHT", -6, 0)
+        label:SetJustifyH("CENTER")
+        label:SetWordWrap(false)
+        tab.label = label
+        tab.tabId = id
+        tab:SetScript("OnClick", function(self)
+            UI.SetListTab(self.tabId)
+        end)
+        tab:SetScript("OnEnter", function(self)
+            if UI.GetListTab() ~= self.tabId then
+                self:SetBackdropColor(0.16, 0.14, 0.08, 0.98)
+            end
+        end)
+        tab:SetScript("OnLeave", function()
+            UI.PaintListTabs()
+        end)
+        return tab
+    end
+
+    local tabNearby = MakeTab("nearby")
+    tabNearby:SetPoint("TOPLEFT", 8, -26)
+    tabNearby:SetPoint("TOPRIGHT", S.main, "TOP", -2, -26)
+    local tabZone = MakeTab("zone")
+    tabZone:SetPoint("TOPLEFT", S.main, "TOP", 2, -26)
+    tabZone:SetPoint("TOPRIGHT", S.main, "TOPRIGHT", -16, -26)
+    S.main.tabNearby = tabNearby
+    S.main.tabZone = tabZone
+    -- Keep a title handle for older empty-state code paths.
+    S.main.title = tabNearby.label
+    UI.PaintListTabs(0, 0)
+
     local line = S.main:CreateTexture(nil, "ARTWORK")
-    line:SetPoint("TOPLEFT", 10, -26)
-    line:SetPoint("TOPRIGHT", -10, -26)
+    line:SetPoint("TOPLEFT", 10, -48)
+    line:SetPoint("TOPRIGHT", -10, -48)
     line:SetHeight(1)
     line:SetColorTexture(0.6, 0.5, 0.2, 0.7)
 
     local list = CreateFrame("Frame", nil, S.main)
-    list:SetPoint("TOPLEFT", 8, -30)
+    list:SetPoint("TOPLEFT", 8, -52)
     list:SetPoint("BOTTOMRIGHT", -16, 18)
-    list:EnableMouse(true)
+    -- Do not EnableMouse on the empty list chrome: that blocks world mouseover
+    -- through the frame and was freezing the UI after stray OnEnter hits.
+    -- Rows, Invite, and the scrollbar still freeze while the cursor is on them.
+    list:EnableMouse(false)
     list:EnableMouseWheel(true)
-    list:SetScript("OnEnter", function()
-        UI.NoteListEnter()
-    end)
-    list:SetScript("OnLeave", function()
-        UI.NoteListLeave()
-    end)
     S.main.list = list
     S.main.scroll = list
     S.main.scrollOffset = 0
 
     local bar = CreateFrame("Slider", nil, S.main, "BackdropTemplate")
     bar:SetOrientation("VERTICAL")
-    bar:SetPoint("TOPRIGHT", -7, -32)
+    bar:SetPoint("TOPRIGHT", -7, -54)
     bar:SetPoint("BOTTOMRIGHT", -7, 20)
     bar:SetWidth(8)
     bar:SetMinMaxValues(0, 1)
@@ -995,6 +1143,11 @@ function UI.BuildMain()
         row:SetPoint("TOPLEFT", list, "TOPLEFT", 0, -((i - 1) * C.ROW_HEIGHT))
         row:RegisterForClicks("LeftButtonDown", "RightButtonDown")
         row:SetAttribute("useOnKeyDown", true)
+        row:EnableMouseWheel(true)
+        row:SetScript("OnMouseWheel", function(_, delta)
+            GameTooltip:Hide()
+            ScrollBy(delta)
+        end)
         row:Hide()
 
         local mark = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -1041,6 +1194,11 @@ function UI.BuildMain()
                 GameTooltip:AddLine(macro, 0.75, 0.75, 0.75, true)
             end
             GameTooltip:Show()
+        end)
+        invite:EnableMouseWheel(true)
+        invite:SetScript("OnMouseWheel", function(_, delta)
+            GameTooltip:Hide()
+            ScrollBy(delta)
         end)
         invite:SetScript("OnLeave", function(self)
             GameTooltip:Hide()
@@ -1395,6 +1553,17 @@ function UI.SetListFrozen(frozen)
     end
 end
 
+-- If freeze was left on after the cursor left (menu, strata, missed OnLeave),
+-- clear it so mouseover/target detection can paint again immediately.
+-- Only clears the flag — caller should RefreshList (avoids nested rebuilds).
+function UI.EnsureListFreezeHonest()
+    if S.listFrozen and not UI.IsListHovered() then
+        S.listFrozen = false
+        return true
+    end
+    return false
+end
+
 function UI.NoteListEnter()
     UI.SetListFrozen(true)
 end
@@ -1442,6 +1611,94 @@ function UI.RequestListPaint()
     else
         UI.RefreshList()
     end
+end
+
+function UI.GetListTab()
+    local tab = (SF.db and SF.db.listTab) or S.listTab or "nearby"
+    if tab == "zone" then
+        return "zone"
+    end
+    return "nearby"
+end
+
+function UI.SetListTab(tab)
+    if tab ~= "zone" then
+        tab = "nearby"
+    end
+    if UI.GetListTab() == tab then
+        UI.PaintListTabs()
+        return
+    end
+    S.listTab = tab
+    if SF.db then
+        SF.db.listTab = tab
+    end
+    if S.main then
+        S.main.scrollOffset = 0
+    end
+    S.moveWave = nil
+    wipe(S.moveKeys)
+    S.moveHeld = nil
+    S.lastShown = nil
+    wipe(S.fadeInAt)
+    wipe(S.fadeOutAt)
+    wipe(S.fadeOutEntry)
+    wipe(S.listedKeys)
+    S.listDirty = false
+    if UI.RefreshList then
+        UI.RefreshList({ force = true, skipMove = true })
+    end
+end
+
+function UI.PaintListTabs(nearCount, zoneCount)
+    if not S.main or not S.main.tabNearby or not S.main.tabZone then
+        return
+    end
+    nearCount = tonumber(nearCount)
+    if not nearCount then
+        nearCount = 0
+        for _ in pairs(S.nearby or {}) do
+            nearCount = nearCount + 1
+        end
+    end
+    zoneCount = tonumber(zoneCount)
+    if not zoneCount then
+        zoneCount = 0
+        for _ in pairs(S.inZone or {}) do
+            zoneCount = zoneCount + 1
+        end
+    end
+    local place = Memory.CurrentArea() or "Nearby"
+    local zoneName = Memory.CurrentZone() or "This zone"
+    local plusAt = C.ZONE_LIST_PLUS or C.MAX_ROWS or 100
+    local zoneCountLabel = tostring(zoneCount)
+    if S.P.zoneRosterFull or zoneCount >= plusAt then
+        zoneCountLabel = plusAt .. "+"
+    end
+    local nearLabel = place
+    if nearCount > 0 then
+        nearLabel = place .. " (" .. nearCount .. ")"
+    end
+    local zoneLabel = zoneName .. " (" .. zoneCountLabel .. ")"
+    if zoneCount == 0 and not S.P.zoneRosterFull then
+        zoneLabel = zoneName
+    end
+    S.main.tabNearby.label:SetText(nearLabel)
+    S.main.tabZone.label:SetText(zoneLabel)
+    local active = UI.GetListTab()
+    local function paint(tab, selected)
+        if selected then
+            tab:SetBackdropColor(0.22, 0.18, 0.08, 0.98)
+            tab:SetBackdropBorderColor(1, 0.82, 0.25, 1)
+            tab.label:SetTextColor(1, 0.86, 0.35)
+        else
+            tab:SetBackdropColor(0.1, 0.1, 0.1, 0.95)
+            tab:SetBackdropBorderColor(0.4, 0.34, 0.16, 0.85)
+            tab.label:SetTextColor(0.75, 0.7, 0.55)
+        end
+    end
+    paint(S.main.tabNearby, active == "nearby")
+    paint(S.main.tabZone, active == "zone")
 end
 
 function UI.RowFadeAlpha(key, now)
@@ -1581,9 +1838,14 @@ function UI.RefreshList(opts)
     local scrollOnly = opts and opts.scrollOnly
     local skipMove = opts and opts.skipMove
 
+    if not force and not scrollOnly then
+        UI.EnsureListFreezeHonest()
+    end
+
     if S.listFrozen and not force and not scrollOnly then
         S.listDirty = true
         UI.PaintTargetHighlightsOnly()
+        UI.PaintListTabs()
         return
     end
 
@@ -1600,6 +1862,7 @@ function UI.RefreshList(opts)
     local ordered
     local zoneList
     local nearCount = 0
+    local listTab = UI.GetListTab()
 
     if scrollOnly and S.displayOrdered then
         ordered = S.displayOrdered
@@ -1749,22 +2012,19 @@ function UI.RefreshList(opts)
     S.sortHold.near = KeysOf(nearList)
 
     ordered = {}
-    if #nearList == 0 and #zoneList > 0 then
-        ordered[#ordered + 1] = { header = "No one nearby", dim = true }
-    end
-    for i = 1, #nearList do
-        if #ordered >= C.MAX_ROWS then
-            break
-        end
-        ordered[#ordered + 1] = nearList[i]
-    end
-    if #zoneList > 0 and #ordered < C.MAX_ROWS then
-        ordered[#ordered + 1] = { header = "In this zone (" .. #zoneList .. ")" }
+    if listTab == "zone" then
         for i = 1, #zoneList do
             if #ordered >= C.MAX_ROWS then
                 break
             end
             ordered[#ordered + 1] = zoneList[i]
+        end
+    else
+        for i = 1, #nearList do
+            if #ordered >= C.MAX_ROWS then
+                break
+            end
+            ordered[#ordered + 1] = nearList[i]
         end
     end
     ordered = UI.HoldLeavingRows(ordered, now)
@@ -1806,15 +2066,38 @@ function UI.RefreshList(opts)
             end
         end
         local out = {}
+        local used = {}
         for i = 1, #held do
             local item = held[i]
             if item.header then
                 out[#out + 1] = { header = item.header, dim = item.dim }
             elseif item.key and not item.fading then
+                used[item.key] = true
                 if byKey[item.key] then
                     out[#out + 1] = byKey[item.key]
                 elseif S.fadeOutEntry[item.key] then
                     out[#out + 1] = S.fadeOutEntry[item.key]
+                end
+            end
+        end
+        -- Keep existing row order stable during the move fade, but still show
+        -- brand-new mouseovers/sightings instead of waiting out the animation.
+        for i = 1, #liveList do
+            local entry = liveList[i]
+            if entry.key and not used[entry.key] and not entry.fading then
+                out[#out + 1] = entry
+                used[entry.key] = true
+            elseif entry.header and not entry.dim then
+                -- Allow a live zone header + its new rows if the hold had none.
+                local already = false
+                for j = 1, #out do
+                    if out[j].header and not out[j].dim then
+                        already = true
+                        break
+                    end
+                end
+                if not already then
+                    out[#out + 1] = { header = entry.header, dim = entry.dim }
                 end
             end
         end
@@ -1931,48 +2214,19 @@ function UI.RefreshList(opts)
         end
         pcall(row.mark.SetFont, row.mark, font, fontSize, fontFlags)
         row.mark:SetWidth(math.max(18, fontSize))
-        local entry = (not locked) and ordered[offset + i] or nil
-        if locked then
-            if row.PaintTarget then
-                row:PaintTarget(row:IsShown() and IsTarget(row.key))
-            end
-            -- Secure attrs stay put in combat; mark/name colors can still refresh.
-            if row:IsShown() and row.key then
-                local color = Memory.GeneralColor(row.key)
-                local kos = Memory.FlaggedKos(row.key)
-                local letter = color == "green" and "G" or color == "yellow" and "Y" or color == "red" and "R" or "-"
-                if not color and kos then
-                    letter = "K"
-                end
-                if color then
-                    local rgb = C.COLOR_RGB[color]
-                    row.mark:SetText(letter)
-                    row.mark:SetTextColor(rgb[1], rgb[2], rgb[3])
-                    row.name:SetTextColor(rgb[1], rgb[2], rgb[3])
-                elseif kos then
-                    row.mark:SetText(letter)
-                    row.mark:SetTextColor(1, 0.3, 0.25)
-                    row.name:SetTextColor(1, 0.45, 0.35)
-                else
-                    local live = (S.nearby and S.nearby[row.key])
-                        or (S.inZone and S.inZone[row.key])
-                        or { key = row.key }
-                    local r, g, b = Memory.NameRGB(row.key, live, maxSeen)
-                    row.mark:SetText(letter)
-                    row.mark:SetTextColor(0.45, 0.45, 0.45)
-                    row.name:SetTextColor(r, g, b)
-                end
-                UI.PaintInvite(row.invite)
-            end
-        elseif i <= visible and entry and entry.header then
+        local entry = ordered[offset + i]
+        if i <= visible and entry and entry.header then
             row:SetHeight(rowH)
             row:ClearAllPoints()
             row:SetPoint("TOPLEFT", S.main.list, "TOPLEFT", 0, -((i - 1) * rowH))
             row:SetWidth(viewWidth)
             row.key = nil
             row.invite.key = nil
-            UI.ApplyInvite(row.invite, nil)
-            UI.ApplyTarget(row, nil)
+            if not locked then
+                UI.ApplyInvite(row.invite, nil)
+                UI.ApplyTarget(row, nil)
+            end
+            UI.SetCombatDisplayOnly(row, locked)
             row.highlight:Hide()
             row.mark:SetText("")
             row.name:SetText(entry.header)
@@ -1995,8 +2249,16 @@ function UI.RefreshList(opts)
             row:SetWidth(viewWidth)
             row.key = entry.key
             row.invite.key = entry.key
-            UI.ApplyInvite(row.invite, entry.key)
-            UI.ApplyTarget(row, entry.key)
+            -- Macros can only be rewritten out of combat. If this row's secure
+            -- target still matches, clicks stay live; otherwise show the name
+            -- and block clicks so we never target the wrong person.
+            local secureOk = (not locked) or Util.SameKey(row.secureKey, entry.key)
+            if not locked then
+                UI.ApplyInvite(row.invite, entry.key)
+                UI.ApplyTarget(row, entry.key)
+                secureOk = true
+            end
+            UI.SetCombatDisplayOnly(row, locked and not secureOk)
             local color = Memory.GeneralColor(entry.key)
             local letter = color == "green" and "G" or color == "yellow" and "Y" or color == "red" and "R" or "-"
             if not color and Memory.FlaggedKos(entry.key) then
@@ -2018,7 +2280,8 @@ function UI.RefreshList(opts)
             row.name:SetText(UI.ListName(entry.key))
             UI.PaintRowIdentity(row, entry)
             local grouped = Group.InMyGroup(entry.key)
-            if grouped then
+            local showInvite = (not grouped) and secureOk and not (locked and not secureOk)
+            if grouped or not showInvite then
                 row:SetWidth(viewWidth)
             else
                 row:SetWidth(math.max(80, viewWidth - 78))
@@ -2032,25 +2295,28 @@ function UI.RefreshList(opts)
                 row:SetAlpha(0)
                 row.invite:SetAlpha(0)
                 row.invite:Hide()
+                UI.SetCombatDisplayOnly(row, false)
                 row:Hide()
             else
                 row:SetAlpha(alpha)
-                row.invite:SetAlpha(grouped and 0 or alpha)
                 row:Show()
                 row:SetAlpha(alpha)
-                if grouped then
-                    row.invite:Hide()
-                    row.invite:SetAlpha(0)
-                else
+                if showInvite then
                     row.invite:Show()
                     row.invite:SetAlpha(alpha)
+                else
+                    row.invite:Hide()
+                    row.invite:SetAlpha(0)
                 end
             end
         else
             row.key = nil
             row.invite.key = nil
-            UI.ApplyInvite(row.invite, nil)
-            UI.ApplyTarget(row, nil)
+            if not locked then
+                UI.ApplyInvite(row.invite, nil)
+                UI.ApplyTarget(row, nil)
+            end
+            UI.SetCombatDisplayOnly(row, false)
             UI.PaintRowIdentity(row, nil)
             row.invite:SetAlpha(0)
             row.invite:Hide()
@@ -2060,13 +2326,15 @@ function UI.RefreshList(opts)
         end
     end
 
-    local place = Memory.CurrentArea() or "Nearby"
-    if nearCount == 0 and #zoneList == 0 and #ordered == 0 then
-        S.main.title:SetText(place)
-        S.main.empty:SetText(C.EMPTY_TEXT)
+    UI.PaintListTabs(nearCount, #zoneList)
+    if #ordered == 0 then
+        if listTab == "zone" then
+            S.main.empty:SetText(C.EMPTY_ZONE or "No one else listed in this zone yet.")
+        else
+            S.main.empty:SetText(C.EMPTY_NEARBY or "No one nearby")
+        end
         S.main.empty:Show()
     else
-        S.main.title:SetText(nearCount > 0 and (place .. " (" .. nearCount .. ")") or place)
         S.main.empty:Hide()
     end
 
@@ -2492,4 +2760,167 @@ function UI.BuildPopup()
     end
 
     tinsert(UISpecialFrames, "SocialForeverRateFrame")
+end
+
+function UI.BuildSameMobPopup()
+    local frame = CreateFrame("Frame", "SocialForeverSameMobFrame", UIParent, "BackdropTemplate")
+    frame:SetSize(320, 110)
+    frame:SetFrameStrata("HIGH")
+    frame:SetClampedToScreen(true)
+    frame:SetMovable(true)
+    frame:EnableMouse(true)
+    frame:Hide()
+    UI.Chrome(frame)
+    S.sameMobPopup = frame
+
+    local drag = CreateFrame("Button", nil, frame)
+    drag:SetPoint("TOPLEFT", 8, -4)
+    drag:SetPoint("TOPRIGHT", -28, -4)
+    drag:SetHeight(18)
+    drag:RegisterForDrag("LeftButton")
+    drag:SetScript("OnDragStart", function()
+        frame:StartMoving()
+    end)
+    drag:SetScript("OnDragStop", function()
+        frame:StopMovingOrSizing()
+    end)
+
+    local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    title:SetPoint("TOPLEFT", 12, -8)
+    title:SetPoint("RIGHT", -28, 0)
+    title:SetJustifyH("LEFT")
+    title:SetText("Same fight")
+    title:SetTextColor(1, 0.82, 0.25)
+    frame.title = title
+
+    local close = CreateFrame("Button", nil, frame)
+    close:SetSize(18, 18)
+    close:SetPoint("TOPRIGHT", -6, -5)
+    local closeText = close:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    closeText:SetPoint("CENTER")
+    closeText:SetText("x")
+    close:SetScript("OnClick", function()
+        if frame.key then
+            Detection.MarkSameMobCooldown(frame.key)
+        end
+        wipe(S.sameMobQueue)
+        frame.key = nil
+        frame:Hide()
+        if not InCombatLockdown() then
+            UI.ApplyInvite(frame.invite, nil)
+        end
+    end)
+
+    local body = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    body:SetPoint("TOPLEFT", 12, -30)
+    body:SetPoint("RIGHT", -12, 0)
+    body:SetJustifyH("LEFT")
+    body:SetWordWrap(true)
+    body:SetTextColor(0.9, 0.9, 0.85)
+    frame.body = body
+
+    local invite = UI.FlatButton(frame, "Invite", 88, 20, true)
+    invite:SetPoint("BOTTOMLEFT", 16, 12)
+    invite:RegisterForClicks("LeftButtonDown")
+    invite:SetAttribute("useOnKeyDown", true)
+    invite.Paint = function(self)
+        self:SetBackdropColor(0.1, 0.16, 0.1, 1)
+        self:SetBackdropBorderColor(0.3, 0.7, 0.35, 1)
+        self.label:SetTextColor(0.55, 1, 0.62)
+    end
+    invite:Paint()
+    invite:SetScript("PostClick", function(self)
+        local key = frame.key
+        if key then
+            Detection.MarkSameMobCooldown(key)
+            S.inviteState[key] = "invited"
+            if UI.RefreshList then
+                UI.RefreshList()
+            end
+        end
+        UI.DismissSameMobPrompt(true)
+    end)
+    frame.invite = invite
+
+    local noThanks = UI.FlatButton(frame, "No thanks", 88, 20)
+    noThanks:SetPoint("LEFT", invite, "RIGHT", 10, 0)
+    noThanks:SetScript("OnClick", function()
+        UI.DismissSameMobPrompt(false)
+    end)
+    frame.noThanks = noThanks
+
+    function frame:Anchor()
+        self:ClearAllPoints()
+        if S.main and S.main:IsShown() then
+            local left = S.main:GetLeft() or 0
+            if left > self:GetWidth() + 16 then
+                self:SetPoint("TOPRIGHT", S.main, "TOPLEFT", -8, 0)
+            else
+                self:SetPoint("TOPLEFT", S.main, "TOPRIGHT", 8, 0)
+            end
+        elseif ChatFrame1 then
+            self:SetPoint("BOTTOMLEFT", ChatFrame1, "TOPLEFT", 0, 60)
+        else
+            self:SetPoint("CENTER")
+        end
+    end
+
+    tinsert(UISpecialFrames, "SocialForeverSameMobFrame")
+end
+
+function UI.DismissSameMobPrompt(accepted)
+    local frame = S.sameMobPopup
+    local key = frame and frame.key
+    if key and not accepted then
+        Detection.MarkSameMobCooldown(key)
+    end
+    if frame then
+        frame.key = nil
+        frame.mob = nil
+        frame:Hide()
+        if not InCombatLockdown() then
+            UI.ApplyInvite(frame.invite, nil)
+        end
+    end
+    if accepted or (key and not accepted) then
+        -- Continue with remaining candidates after a beat.
+        C_Timer.After(0.15, function()
+            if UI.ShowSameMobPrompt then
+                UI.ShowSameMobPrompt()
+            end
+        end)
+    end
+end
+
+function UI.ShowSameMobPrompt()
+    if InCombatLockdown() then
+        return
+    end
+    if not S.sameMobPopup then
+        return
+    end
+    if S.sameMobPopup:IsShown() then
+        return
+    end
+    if not Group.PartyHasRoom() then
+        wipe(S.sameMobQueue)
+        return
+    end
+    while #S.sameMobQueue > 0 do
+        local cand = table.remove(S.sameMobQueue, 1)
+        if cand and cand.key and Detection.SameMobEligible(cand.key, cand) then
+            local spoken = UI.SpokenName(cand.key) or cand.key
+            local mob = cand.mob or "the same mob"
+            S.sameMobPopup.key = cand.key
+            S.sameMobPopup.mob = mob
+            S.sameMobPopup.body:SetText(spoken .. " was fighting the same " .. mob .. ".\nGroup up?")
+            UI.ApplyInvite(S.sameMobPopup.invite, cand.key)
+            S.sameMobPopup:Show()
+            S.sameMobPopup:Raise()
+            if S.sameMobPopup.Anchor then
+                S.sameMobPopup:Anchor()
+            end
+            return
+        end
+    end
 end

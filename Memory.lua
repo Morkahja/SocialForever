@@ -222,7 +222,8 @@ function Memory.SeenCount(key, field)
 end
 
 function Memory.Familiarity(key)
-    return Memory.SeenCount(key, "nearbyTimes") + Memory.SeenCount(key, "zoneTimes")
+    -- Only real Nearby encounters count toward familiarity / list sorting.
+    return Memory.SeenCount(key, "nearbyTimes")
 end
 
 function Memory.InvalidateMaxFamiliarity()
@@ -245,9 +246,9 @@ function Memory.MaxFamiliarity()
     end
     local maxCount = 0
     if SF.db and type(SF.db.players) == "table" then
-        for _, rec in pairs(SF.db.players) do
+        for key, rec in pairs(SF.db.players) do
             if type(rec) == "table" then
-                local n = (tonumber(rec.nearbyTimes) or 0) + (tonumber(rec.zoneTimes) or 0)
+                local n = Memory.Familiarity(key)
                 if n > maxCount then
                     maxCount = n
                 end
@@ -283,12 +284,16 @@ function Memory.CurrentHistoryPlace()
     return Memory.CurrentZone()
 end
 
+-- Places ("Seen before in …") only for people who have actually been Nearby.
 function Memory.NoteHistory(key)
     local place = Memory.CurrentHistoryPlace()
     if not place or not SF.db or not key then
         return
     end
     local rec = Memory.EnsurePlayer(key)
+    if (tonumber(rec.nearbyTimes) or 0) < 1 then
+        return
+    end
     if type(rec.places) ~= "table" then
         rec.places = {}
     end
@@ -319,13 +324,15 @@ function Memory.CurrentArea()
     return nil
 end
 
+-- isNew: first time this person appears in the current Nearby sightings.
+-- Each Nearby encounter counts once for nearbyTimes (and unlocks place history).
 function Memory.NoteNearbyPlace(key, isNew)
     local area = Memory.CurrentArea()
     if not area or not SF.db then
         return area
     end
     local rec = Memory.EnsurePlayer(key)
-    if isNew and rec.nearbyArea ~= area then
+    if isNew then
         rec.nearbyTimes = (tonumber(rec.nearbyTimes) or 0) + 1
         Memory.NoteFamiliarityMax(key)
     end

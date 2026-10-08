@@ -1,5 +1,13 @@
 # Social Forever — Changelog
 
+## 0.4.1 — 2026-10-08
+
+- Nearby and zone people are on separate tabs. The nearby tab uses your subzone name; the zone tab uses the zone name (and can show 100+).
+- After you change subzone, names stay on Nearby for at least 15 seconds so the list does not jump as much.
+- Optional same-mob grouping: ask before inviting, or auto-invite, when someone nearby was damaging the same mob you were. Both settings default off.
+- Mouseovers and other sightings can show on the list during combat; brand-new rows stay click-safe until combat ends.
+- Memory is Nearby-only: “Been nearby” counts real Nearby encounters, and “Seen before in …” only updates when they have been Nearby. The old same-zone times line is gone.
+
 ## 0.3.2 — 2026-10-07
 
 - Marks, clear mark, and Kill on sight update that player's color and letter on the list right away, even while your mouse is over it.

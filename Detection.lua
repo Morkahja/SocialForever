@@ -132,10 +132,33 @@ function Detection.WatchZone()
 end
 
 
+function Detection.WatchArea()
+    if Memory.InCity() then
+        S.trackedArea = Memory.CurrentArea()
+        S.areaPurgeAt = nil
+        return
+    end
+    local area = Memory.CurrentArea()
+    if not area or area == S.trackedArea then
+        return
+    end
+    local previous = S.trackedArea
+    S.trackedArea = area
+    if previous then
+        -- Keep prior-area people visible at least AREA_PURGE_DELAY after a move.
+        S.areaPurgeAt = GetTime() + C.AREA_PURGE_DELAY
+    end
+end
+
 function Detection.PurgeOtherSubzones()
     if Memory.InCity() then
         return
     end
+    Detection.WatchArea()
+    if not S.areaPurgeAt or GetTime() < S.areaPurgeAt then
+        return
+    end
+    S.areaPurgeAt = nil
     local area = Memory.CurrentArea()
     if not area then
         return
@@ -264,12 +287,21 @@ function Detection.Publish()
         end
     end
     local targetKey = Util.UnitIdentity("target")
-    local sig = Detection.DisplayMapSig(found) .. "\29" .. Detection.DisplayMapSig(zoneFound) .. "\28" .. (targetKey or "")
+    local sig = Detection.DisplayMapSig(found)
+        .. "\29"
+        .. Detection.DisplayMapSig(zoneFound)
+        .. "\28"
+        .. (targetKey or "")
+        .. "\27"
+        .. (S.P.zoneRosterFull and "+" or "")
     local changed = sig ~= S.P.publishSig
     S.nearby = found
     S.inZone = zoneFound
     S.P.publishSig = sig
     if changed and UI.RefreshList then
+        if UI.EnsureListFreezeHonest then
+            UI.EnsureListFreezeHonest()
+        end
         UI.RefreshList()
     end
 end
@@ -717,9 +749,6 @@ function Detection.NoteZone(sender, channelString, channelBase, guid)
     end
     faction = Util.NormFaction(faction) or (raceFile and C.FACTION_BY_RACE[Util.NormRaceFile(raceFile)]) or nil
     local prev = S.zoneSeen[key]
-    if not prev then
-        Memory.BumpSeen(key, "zoneTimes")
-    end
     S.zoneSeen[key] = {
         key = key,
         class = classFile or (prev and prev.class),
@@ -740,7 +769,6 @@ function Detection.NoteZone(sender, channelString, channelBase, guid)
             rec.faction = faction
         end
     end
-    Memory.NoteHistory(key)
     Detection.Publish()
 end
 
@@ -963,6 +991,7 @@ function Detection.RefreshGeneralRoster()
     local channelNumber, displayIndex, listedCount = Detection.FindGeneralChannel()
     if not channelNumber and not displayIndex then
         wipe(S.zoneRoster)
+        S.P.zoneRosterFull = false
         Detection.Publish()
         return
     end
@@ -976,6 +1005,8 @@ function Detection.RefreshGeneralRoster()
     if not memberCount or memberCount < 1 then
         return
     end
+    -- Channel UI only exposes 200 roster slots; at that cap there are usually more.
+    local rosterFull = memberCount >= 200
     if memberCount > 200 then
         memberCount = 200
     end
@@ -1048,6 +1079,15 @@ function Detection.RefreshGeneralRoster()
     if not gotAny then
         return
     end
+
+    local rosterSize = 0
+    for _ in pairs(nextRoster) do
+        rosterSize = rosterSize + 1
+    end
+    if rosterSize >= 200 then
+        rosterFull = true
+    end
+    S.P.zoneRosterFull = rosterFull == true
 
     wipe(S.zoneRoster)
     for key, seen in pairs(nextRoster) do
@@ -1238,7 +1278,287 @@ function Detection.QueueDamageMeterHarvest()
             return
         end
         Detection.HarvestDamageMeter(stamp)
+        Detection.EvaluateSameMobGrouping(stamp)
     end)
+end
+
+function Detection.DamageMeterSessionType()
+    return Enum and Enum.DamageMeterSessionType and Enum.DamageMeterSessionType.Current or 1
+end
+
+function Detection.DamageMeterDamageDoneType()
+    return Enum and Enum.DamageMeterType and Enum.DamageMeterType.DamageDone or 0
+end
+
+-- Mob names this source damaged in the just-finished DamageDone session.
+function Detection.MobsDamagedBySource(sourceGUID)
+    local mobs = {}
+    if not sourceGUID or not C_DamageMeter or type(C_DamageMeter.GetCombatSessionSourceFromType) ~= "function" then
+        return mobs
+    end
+    local ok, sessionSource = pcall(
+        C_DamageMeter.GetCombatSessionSourceFromType,
+        Detection.DamageMeterSessionType(),
+        Detection.DamageMeterDamageDoneType(),
+        sourceGUID,
+        nil
+    )
+    if not ok or type(sessionSource) ~= "table" or Util.Secret(sessionSource) then
+        return mobs
+    end
+    local spells = sessionSource.combatSpells
+    if type(spells) ~= "table" or Util.Secret(spells) then
+        return mobs
+    end
+    local function takeDetail(detail)
+        if type(detail) ~= "table" or Util.Secret(detail) then
+            return
+        end
+        if Util.PlainBool(detail.isMob) ~= true then
+            return
+        end
+        local amount = Util.PlainNumber(detail.amount) or 0
+        if amount <= 0 then
+            return
+        end
+        local name = Util.PlainString(detail.unitName)
+        if name and name ~= "" then
+            mobs[name:lower()] = name
+        end
+    end
+    for i = 1, #spells do
+        local spell = spells[i]
+        if type(spell) == "table" and not Util.Secret(spell) then
+            local details = spell.combatSpellDetails
+            if type(details) == "table" and not Util.Secret(details) then
+                if details[1] ~= nil then
+                    for j = 1, #details do
+                        takeDetail(details[j])
+                    end
+                else
+                    takeDetail(details)
+                end
+            end
+        end
+    end
+    return mobs
+end
+
+function Detection.FirstSharedMob(myMobs, theirMobs)
+    if type(myMobs) ~= "table" or type(theirMobs) ~= "table" then
+        return nil
+    end
+    for lower, name in pairs(myMobs) do
+        if theirMobs[lower] then
+            return name
+        end
+    end
+    return nil
+end
+
+function Detection.RecentlyNearby(key)
+    if not key then
+        return false
+    end
+    if S.nearby and S.nearby[key] then
+        return true
+    end
+    local seen = S.sightings and S.sightings[key]
+    if not seen then
+        return false
+    end
+    local grace = C.SAME_MOB_NEARBY_GRACE or 60
+    return (GetTime() - (seen.at or 0)) <= grace
+end
+
+function Detection.SameMobOnCooldown(key)
+    local at = S.sameMobInviteAt and S.sameMobInviteAt[key]
+    if not at then
+        return false
+    end
+    return (GetTime() - at) < (C.SAME_MOB_COOLDOWN or 300)
+end
+
+function Detection.MarkSameMobCooldown(key)
+    key = Util.SafeKey(key)
+    if not key then
+        return
+    end
+    S.sameMobInviteAt[key] = GetTime()
+end
+
+function Detection.SameMobEligible(key, entry)
+    key = Util.SafeKey(key)
+    if not key or Util.IsMe(key) then
+        return false
+    end
+    if Group.InMyGroup(key) then
+        return false
+    end
+    if Memory.IsBlocked(key) or Memory.FlaggedKos(key) then
+        return false
+    end
+    if Util.IsOtherFaction(key, entry) then
+        return false
+    end
+    if Detection.IsVisibleMobName(key) then
+        return false
+    end
+    if not Detection.RecentlyNearby(key) then
+        return false
+    end
+    if Detection.SameMobOnCooldown(key) then
+        return false
+    end
+    return true
+end
+
+function Detection.CollectSameMobCandidates()
+    local list = {}
+    if not C_DamageMeter then
+        return list
+    end
+    local myGuid = Util.PlainString(UnitGUID("player"))
+    if not myGuid then
+        return list
+    end
+    local myMobs = Detection.MobsDamagedBySource(myGuid)
+    if not next(myMobs) then
+        return list
+    end
+    local damageDone = Detection.DamageMeterDamageDoneType()
+    local sessionType = Detection.DamageMeterSessionType()
+    if type(C_DamageMeter.GetCombatSessionFromType) ~= "function" then
+        return list
+    end
+    local ok, session = pcall(C_DamageMeter.GetCombatSessionFromType, sessionType, damageDone)
+    if not ok or type(session) ~= "table" or Util.Secret(session) then
+        return list
+    end
+    local sources = session.combatSources
+    if type(sources) ~= "table" or Util.Secret(sources) then
+        return list
+    end
+    for i = 1, #sources do
+        local source = sources[i]
+        if type(source) == "table" and not Util.Secret(source) then
+            if Util.PlainBool(source.isLocalPlayer) ~= true
+                and not (source.sourceCreatureID and Util.PlainNumber(source.sourceCreatureID))
+            then
+                local amount = Util.PlainNumber(source.totalAmount) or 0
+                local guid = Util.PlainString(source.sourceGUID)
+                if amount > 0 and guid then
+                    local key, classFile, raceFile, faction = Detection.LiveIdentityFromGuid(guid)
+                    local entry = {
+                        key = key,
+                        class = classFile,
+                        race = raceFile,
+                        faction = faction,
+                    }
+                    if key and Detection.SameMobEligible(key, entry) then
+                        local theirMobs = Detection.MobsDamagedBySource(guid)
+                        local shared = Detection.FirstSharedMob(myMobs, theirMobs)
+                        if shared then
+                            local near = S.nearby and S.nearby[key]
+                            local seen = S.sightings and S.sightings[key]
+                            list[#list + 1] = {
+                                key = key,
+                                mob = shared,
+                                yards = (near and near.yards) or (seen and seen.yards) or nil,
+                                amount = amount,
+                                class = classFile,
+                                race = raceFile,
+                                faction = faction,
+                            }
+                        end
+                    end
+                end
+            end
+        end
+    end
+    table.sort(list, function(a, b)
+        local ya, yb = a.yards, b.yards
+        if ya and yb and math.abs(ya - yb) > 0.5 then
+            return ya < yb
+        end
+        if ya and not yb then
+            return true
+        end
+        if yb and not ya then
+            return false
+        end
+        local fa = Memory.Familiarity(a.key)
+        local fb = Memory.Familiarity(b.key)
+        if fa ~= fb then
+            return fa > fb
+        end
+        return (a.amount or 0) > (b.amount or 0)
+    end)
+    return list
+end
+
+function Detection.EvaluateSameMobGrouping(combatStamp)
+    if InCombatLockdown() then
+        return
+    end
+    if not Group.SameMobAskOn() and not Group.SameMobAutoOn() then
+        return
+    end
+    if combatStamp ~= nil and S.P.sameMobStamp == combatStamp then
+        return
+    end
+    if combatStamp ~= nil then
+        S.P.sameMobStamp = combatStamp
+    end
+    if not Group.PartyHasRoom() then
+        return
+    end
+    local candidates = Detection.CollectSameMobCandidates()
+    if #candidates == 0 then
+        return
+    end
+    if Group.SameMobAutoOn() then
+        local anyInvited = false
+        local fallbackFrom = nil
+        for i = 1, #candidates do
+            if not Group.PartyHasRoom() then
+                break
+            end
+            local cand = candidates[i]
+            if Detection.SameMobEligible(cand.key, cand) then
+                if Group.InviteByKey(cand.key) then
+                    Detection.MarkSameMobCooldown(cand.key)
+                    anyInvited = true
+                elseif S.P.sameMobApiInvite == false then
+                    fallbackFrom = i
+                    break
+                end
+            end
+        end
+        if UI.RefreshList and anyInvited then
+            UI.RefreshList()
+        end
+        if fallbackFrom then
+            -- Forever blocked API invites — fall back to clickable secure Invite.
+            wipe(S.sameMobQueue)
+            for i = fallbackFrom, #candidates do
+                S.sameMobQueue[#S.sameMobQueue + 1] = candidates[i]
+            end
+            if UI.ShowSameMobPrompt then
+                UI.ShowSameMobPrompt()
+            end
+        end
+        return
+    end
+    if Group.SameMobAskOn() then
+        wipe(S.sameMobQueue)
+        for i = 1, #candidates do
+            S.sameMobQueue[#S.sameMobQueue + 1] = candidates[i]
+        end
+        if UI.ShowSameMobPrompt then
+            UI.ShowSameMobPrompt()
+        end
+    end
 end
 
 function Detection.CleanToken(token)

@@ -303,3 +303,93 @@ function Group.Arm()
         end
     end
 end
+
+function Group.PartyHasRoom()
+    local state = Group.GroupState()
+    if state == "raid" then
+        local ok, n = pcall(GetNumGroupMembers)
+        n = ok and Util.PlainNumber(n) or nil
+        return n ~= nil and n < 40
+    end
+    if state == "party" then
+        local ok, n = pcall(GetNumGroupMembers)
+        n = ok and Util.PlainNumber(n) or nil
+        return n ~= nil and n < 5
+    end
+    return true
+end
+
+-- Direct invite when Forever allows it. Returns true on accepted call.
+-- Sets S.P.sameMobApiInvite to false if the client rejects automation.
+function Group.InviteByKey(key)
+    key = Util.SafeKey(key)
+    if not key or InCombatLockdown() then
+        return false
+    end
+    if Group.InMyGroup(key) or Memory.IsBlocked(key) or Memory.FlaggedKos(key) then
+        return false
+    end
+    if Util.IsOtherFaction(key) then
+        return false
+    end
+    if not Group.PartyHasRoom() then
+        return false
+    end
+    if S.P.sameMobApiInvite == false then
+        return false
+    end
+    local name = UI.SlashName and UI.SlashName(key) or nil
+    if not name then
+        return false
+    end
+    if C_PartyInfo and type(C_PartyInfo.InviteUnit) == "function" then
+        local ok = pcall(C_PartyInfo.InviteUnit, name)
+        if ok then
+            S.P.sameMobApiInvite = true
+            S.inviteState[key] = "invited"
+            return true
+        end
+    end
+    if type(InviteUnit) == "function" then
+        local ok = pcall(InviteUnit, name)
+        if ok then
+            S.P.sameMobApiInvite = true
+            S.inviteState[key] = "invited"
+            return true
+        end
+    end
+    S.P.sameMobApiInvite = false
+    return false
+end
+
+function Group.SameMobAskOn()
+    return SF.db and SF.db.sameMobAsk == true
+end
+
+function Group.SameMobAutoOn()
+    return SF.db and SF.db.sameMobAutoInvite == true
+end
+
+function Group.SetSameMobAsk(on)
+    if not SF.db then
+        return
+    end
+    if on then
+        SF.db.sameMobAsk = true
+        SF.db.sameMobAutoInvite = false
+    else
+        SF.db.sameMobAsk = false
+    end
+end
+
+function Group.SetSameMobAuto(on)
+    if not SF.db then
+        return
+    end
+    if on then
+        SF.db.sameMobAutoInvite = true
+        SF.db.sameMobAsk = false
+    else
+        SF.db.sameMobAutoInvite = false
+    end
+end

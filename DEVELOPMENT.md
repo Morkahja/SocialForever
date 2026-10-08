@@ -4,6 +4,13 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.4.1 — Tabs, same-mob grouping, Nearby-only memory
+
+- List split into Nearby (area/subzone tab) and Zone (General roster tab); zone list shows up to 100 with `100+` when full.
+- Subzone purge delayed 15s; combat list display + click shield retained.
+- `sameMobAsk` / `sameMobAutoInvite` (default off, mutually exclusive). After regen + meter settle, DamageDone spell target details find shared mob names; ask popup or `C_PartyInfo.InviteUnit` / fallback secure Invite; 5-minute per-player cooldown.
+- Familiarity and place history only from Nearby; zoneTimes counter and tooltip line removed.
+
 ## 0.3.2 — Immediate mark paint while frozen
 
 - `UI.PaintRowAppearance(key)` refreshes mark letter/colors (and invite block) for one row without reordering; called from SetColor / ToggleKos / flags after RefreshList.
