@@ -1,5 +1,16 @@
 # Social Forever — Changelog
 
+## 0.4.3-beta — 2026-10-13
+
+- When someone declines your party invite, Social Forever remembers it. The tooltip shows **Denied invite** in red with the count (1 time, 2 times, …), next to how often you have grouped together.
+
+## 0.4.2-beta — 2026-10-10
+
+- Same-mob grouping no longer pretends an invite was sent when Forever blocks programmatic invites. It opens the clickable Invite prompt right away instead of waiting on a dead cooldown.
+- Damage-meter harvest retries when combat or an empty meter would have skipped a fight, so same-mob prompts show up sooner after you leave combat.
+- The Invite button only shows **Invited** when the secure `/invite` is actually armed for that person.
+- Invite tooltip notes that people in combat see the popup only after they leave combat.
+
 ## 0.4.1 — 2026-10-08
 
 - Nearby and zone people are on separate tabs. The nearby tab uses your subzone name; the zone tab uses the zone name (and can show 100+).

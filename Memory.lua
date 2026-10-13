@@ -504,6 +504,29 @@ function Memory.AddCustomFlag(key, text)
     end
 end
 
+function Memory.NoteDecline(key)
+    key = Util.SafeKey(key)
+    if not key or Util.IsMe(key) then
+        return nil
+    end
+    local rec = Memory.EnsurePlayer(key)
+    local n = tonumber(rec.declines) or 0
+    if n < 0 then
+        n = 0
+    end
+    rec.declines = n + 1
+    return rec.declines
+end
+
+function Memory.DeclineCount(key)
+    local rec = SF.db and SF.db.players and SF.db.players[key]
+    local n = type(rec) == "table" and tonumber(rec.declines) or 0
+    if not n or n < 0 then
+        return 0
+    end
+    return n
+end
+
 function Memory.HistoryLine(key)
     local rec = SF.db.players[key]
     local groups = type(rec) == "table" and tonumber(rec.groups) or 0
@@ -514,6 +537,14 @@ function Memory.HistoryLine(key)
         text = "Grouped once"
     else
         text = "Grouped " .. groups .. " times"
+    end
+    local declines = type(rec) == "table" and tonumber(rec.declines) or 0
+    if declines and declines > 0 then
+        if declines == 1 then
+            text = text .. " · denied invite once"
+        else
+            text = text .. " · denied invite " .. declines .. " times"
+        end
     end
     local color = type(rec) == "table" and Util.ValidColor(rec.color)
     if color then

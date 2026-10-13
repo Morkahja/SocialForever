@@ -265,6 +265,22 @@ function UI.InviteMacro(key)
     return "/invite " .. name
 end
 
+-- True when the secure button is armed for this exact player.
+function UI.InviteArmed(button, key)
+    if not button or not key then
+        return false
+    end
+    if not Util.SameKey(button.secureKey, key) then
+        return false
+    end
+    local expected = UI.InviteMacro(key)
+    if not expected then
+        return false
+    end
+    local macro = button:GetAttribute("macrotext1") or button:GetAttribute("macrotext")
+    return macro == expected
+end
+
 function UI.MatchKnownKey(name)
     if type(name) ~= "string" or name == "" then
         return nil
@@ -308,6 +324,9 @@ function UI.NoteDecline(message)
         return
     end
     S.inviteState[key] = "declined"
+    if Memory.NoteDecline then
+        Memory.NoteDecline(key)
+    end
     if UI.RefreshList then
         UI.RefreshList()
     end
@@ -595,6 +614,14 @@ function UI.ShowTip(owner, key)
         GameTooltip:AddLine("Grouped together: 1 time", 0.85, 0.85, 0.85, true)
     else
         GameTooltip:AddLine("Grouped together: " .. groups .. " times", 0.85, 0.85, 0.85, true)
+    end
+    local declines = Memory.DeclineCount and Memory.DeclineCount(key) or 0
+    if declines > 0 then
+        if declines == 1 then
+            GameTooltip:AddLine("Denied invite: 1 time", 1, 0.4, 0.35, true)
+        else
+            GameTooltip:AddLine("Denied invite: " .. declines .. " times", 1, 0.4, 0.35, true)
+        end
     end
     local flags = Memory.FlagCounts(key)
     if #flags > 0 then
@@ -1168,6 +1195,9 @@ function UI.BuildMain()
             if not key or InCombatLockdown() or Group.InMyGroup(key) or Memory.IsBlocked(key) or Memory.FlaggedKos(key) then
                 return
             end
+            if not UI.InviteArmed(self, key) then
+                return
+            end
             S.inviteState[key] = "invited"
             UI.PaintInvite(self)
         end)
@@ -1192,6 +1222,9 @@ function UI.BuildMain()
             local macro = self.key and UI.InviteMacro(self.key)
             if macro then
                 GameTooltip:AddLine(macro, 0.75, 0.75, 0.75, true)
+            end
+            if state ~= "declined" then
+                GameTooltip:AddLine("If they are in combat, their invite popup waits until they leave it.", 0.65, 0.65, 0.6, true)
             end
             GameTooltip:Show()
         end)
@@ -2253,10 +2286,12 @@ function UI.RefreshList(opts)
             -- target still matches, clicks stay live; otherwise show the name
             -- and block clicks so we never target the wrong person.
             local secureOk = (not locked) or Util.SameKey(row.secureKey, entry.key)
+            local inviteOk = (not locked) or Util.SameKey(row.invite.secureKey, entry.key)
             if not locked then
                 UI.ApplyInvite(row.invite, entry.key)
                 UI.ApplyTarget(row, entry.key)
                 secureOk = true
+                inviteOk = UI.InviteArmed(row.invite, entry.key)
             end
             UI.SetCombatDisplayOnly(row, locked and not secureOk)
             local color = Memory.GeneralColor(entry.key)
@@ -2280,7 +2315,8 @@ function UI.RefreshList(opts)
             row.name:SetText(UI.ListName(entry.key))
             UI.PaintRowIdentity(row, entry)
             local grouped = Group.InMyGroup(entry.key)
-            local showInvite = (not grouped) and secureOk and not (locked and not secureOk)
+            local blocked = Memory.IsBlocked(entry.key) or Memory.FlaggedKos(entry.key)
+            local showInvite = (not grouped) and (not blocked) and inviteOk
             if grouped or not showInvite then
                 row:SetWidth(viewWidth)
             else
@@ -2831,14 +2867,20 @@ function UI.BuildSameMobPopup()
     invite:Paint()
     invite:SetScript("PostClick", function(self)
         local key = frame.key
-        if key then
+        if key and UI.InviteArmed(self, key) then
             Detection.MarkSameMobCooldown(key)
             S.inviteState[key] = "invited"
             if UI.RefreshList then
                 UI.RefreshList()
             end
+            UI.DismissSameMobPrompt(true)
+            return
         end
-        UI.DismissSameMobPrompt(true)
+        -- Click did not send — keep the prompt so they can try again out of combat.
+        if key then
+            UI.ApplyInvite(self, key)
+            self:Paint()
+        end
     end)
     frame.invite = invite
 
@@ -2894,8 +2936,12 @@ end
 
 function UI.ShowSameMobPrompt()
     if InCombatLockdown() then
+        if S.sameMobQueue and #S.sameMobQueue > 0 then
+            S.P.sameMobPromptPending = true
+        end
         return
     end
+    S.P.sameMobPromptPending = false
     if not S.sameMobPopup then
         return
     end

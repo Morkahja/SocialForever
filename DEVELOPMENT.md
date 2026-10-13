@@ -4,6 +4,19 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.4.3-beta — Declined invite counter
+
+- `CHAT_MSG_SYSTEM` decline match already painted Invited→Declined; `UI.NoteDecline` now also calls `Memory.NoteDecline`, which increments `players[key].declines`.
+- Tooltip shows **Denied invite: N time(s)** in red under Grouped together when count > 0. Rate-popup history line mentions declines too.
+- Count is personal memory only; not shared over addon whispers.
+
+## 0.4.2-beta — Invite send path honesty
+
+- Forever rejects programmatic `InviteUnit` even when `pcall` succeeds. `sameMobApiInvite` starts false and `InviteByKey` only runs after a proven API; same-mob auto falls through to the secure Invite popup instead of marking Invited + a 5-minute cooldown with no send.
+- `EvaluateSameMobGrouping` no longer burns `sameMobStamp` on an empty candidate list. `QueueDamageMeterHarvest` retries (up to 6) through lockdown and empty meter so prompts are not deferred to a later fight.
+- Same-mob prompt pending flag replays on `PLAYER_REGEN_ENABLED`.
+- List Invite / same-mob Invite PostClick only paints Invited when `UI.InviteArmed` matches key + macrotext; invite visibility uses `invite.secureKey`, not the row target key. Tooltip and README mention invitee combat deferral.
+
 ## 0.4.1 — Tabs, same-mob grouping, Nearby-only memory
 
 - List split into Nearby (area/subzone tab) and Zone (General roster tab); zone list shows up to 100 with `100+` when full.

@@ -217,6 +217,11 @@ events:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_REGEN_ENABLED" then
         Detection.Scan()
         Detection.QueueDamageMeterHarvest()
+        if S.P.sameMobPromptPending or (S.sameMobQueue and #S.sameMobQueue > 0) then
+            if UI.ShowSameMobPrompt then
+                UI.ShowSameMobPrompt()
+            end
+        end
         return
     end
     if event == "DAMAGE_METER_CURRENT_SESSION_UPDATED"

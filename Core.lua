@@ -160,8 +160,11 @@ S.P = {
     nameplateByUnit = {},
     staleTrackable = 18,
     staleInteraction = 25,
-    sameMobApiInvite = nil,
+    -- false until a programmatic invite is proven; Forever rejects these.
+    sameMobApiInvite = false,
     sameMobStamp = nil,
+    sameMobPromptPending = false,
+    meterAttempt = 0,
 }
 
 C.LOOK_UNITS = {

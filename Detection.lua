@@ -1189,17 +1189,18 @@ function Detection.OnPlayerAura(unit, updateInfo)
     end
 end
 
-function Detection.HarvestDamageMeter(combatStamp)
+-- forceMark: final attempt — stop retrying even if the meter was empty.
+function Detection.HarvestDamageMeter(combatStamp, forceMark)
     if not C_DamageMeter then
-        return
+        return false
     end
     if combatStamp ~= nil and S.P.harvestedGen == combatStamp then
-        return
+        return true
     end
     if type(C_DamageMeter.IsDamageMeterAvailable) == "function" then
         local ok, available = pcall(C_DamageMeter.IsDamageMeterAvailable)
         if ok and Util.PlainBool(available) == false then
-            return
+            return false
         end
     end
     local sessionTypes = {}
@@ -1258,27 +1259,49 @@ function Detection.HarvestDamageMeter(combatStamp)
             end
         end
     end
-    if combatStamp ~= nil then
-        S.P.harvestedGen = combatStamp
+    if found or forceMark then
+        if combatStamp ~= nil then
+            S.P.harvestedGen = combatStamp
+        end
     end
     if found then
         Detection.Publish()
     end
+    return found or forceMark == true
 end
 
-function Detection.QueueDamageMeterHarvest()
+function Detection.QueueDamageMeterHarvest(attempt)
+    attempt = tonumber(attempt) or 1
+    if attempt < 1 then
+        attempt = 1
+    end
     if S.P.meterPending then
         return
     end
     S.P.meterPending = true
+    S.P.meterAttempt = attempt
     local stamp = S.P.combatGen
-    C_Timer.After(0.75, function()
+    local delay = attempt == 1 and 0.75 or math.min(3, 0.5 + attempt * 0.5)
+    C_Timer.After(delay, function()
         S.P.meterPending = false
-        if InCombatLockdown() then
+        if stamp ~= S.P.combatGen then
             return
         end
-        Detection.HarvestDamageMeter(stamp)
-        Detection.EvaluateSameMobGrouping(stamp)
+        if InCombatLockdown() then
+            if attempt < 6 then
+                Detection.QueueDamageMeterHarvest(attempt + 1)
+            end
+            return
+        end
+        local lastTry = attempt >= 6
+        Detection.HarvestDamageMeter(stamp, lastTry)
+        local sameMobDone = true
+        if Group.SameMobAskOn() or Group.SameMobAutoOn() then
+            sameMobDone = Detection.EvaluateSameMobGrouping(stamp) == true
+        end
+        if not sameMobDone and not lastTry then
+            Detection.QueueDamageMeterHarvest(attempt + 1)
+        end
     end)
 end
 
@@ -1497,25 +1520,27 @@ function Detection.CollectSameMobCandidates()
     return list
 end
 
+-- Returns true when this combat stamp is finished (handled or nothing to do).
+-- Returns false when the meter looks empty / not ready so the caller can retry.
 function Detection.EvaluateSameMobGrouping(combatStamp)
     if InCombatLockdown() then
-        return
+        return false
     end
     if not Group.SameMobAskOn() and not Group.SameMobAutoOn() then
-        return
+        return true
     end
     if combatStamp ~= nil and S.P.sameMobStamp == combatStamp then
-        return
-    end
-    if combatStamp ~= nil then
-        S.P.sameMobStamp = combatStamp
+        return true
     end
     if not Group.PartyHasRoom() then
-        return
+        return true
     end
     local candidates = Detection.CollectSameMobCandidates()
     if #candidates == 0 then
-        return
+        return false
+    end
+    if combatStamp ~= nil then
+        S.P.sameMobStamp = combatStamp
     end
     if Group.SameMobAutoOn() then
         local anyInvited = false
@@ -1548,7 +1573,7 @@ function Detection.EvaluateSameMobGrouping(combatStamp)
                 UI.ShowSameMobPrompt()
             end
         end
-        return
+        return true
     end
     if Group.SameMobAskOn() then
         wipe(S.sameMobQueue)
@@ -1559,6 +1584,7 @@ function Detection.EvaluateSameMobGrouping(combatStamp)
             UI.ShowSameMobPrompt()
         end
     end
+    return true
 end
 
 function Detection.CleanToken(token)

@@ -88,6 +88,8 @@ The button beside a player can show:
 
 The invite button disappears while that player is already in your group and returns after they leave.
 
+If the other player is still in combat, their invite popup waits until they leave combat — that can look like a long delay even when your click already went through.
+
 ## Familiar faces
 
 Social Forever remembers how often you encounter each player.
@@ -110,7 +112,8 @@ Hover over a player to see more of their history, including:
 - The subzone where they were last seen.
 - Other zones or dungeons where you have encountered them.
 - How many times they have been nearby.
-- How many times they have appeared in the same zone.
+- How many times you have grouped together.
+- How many times they declined your invite (in red, when it has happened).
 - Your mark and the shared mark.
 - Any flags attached to them.
 
