@@ -53,50 +53,25 @@ function Sharing.MaybeHello(key)
 end
 
 function Sharing.NoteEmpty(note)
+    -- Marks only. Flags are personal reminders and never count as shared data.
     if Util.ValidColor(note.color) or Util.ValidStars(note.stars) then
         return false
-    end
-    if type(note.flags) == "table" then
-        for _, on in pairs(note.flags) do
-            if on then
-                return false
-            end
-        end
     end
     return true
 end
 
 function Sharing.Encode(subject, note, origin)
-    local flags = {}
-    if type(note.flags) == "table" then
-        for flag, on in pairs(note.flags) do
-            flag = Memory.SanitizeFlag(flag)
-            if on and flag then
-                flags[#flags + 1] = flag
-            end
-        end
-    end
-    table.sort(flags)
-    while #flags > 8 do
-        flags[#flags] = nil
-    end
-    local function pack(list)
-        local color = C.COLOR_WIRE[Util.ValidColor(note.color)] or "-"
-        local stars = Util.ValidStars(note.stars) or 0
-        return string.format(
-            "D\t%s\t%s\t%d\t%s\t%s",
-            subject,
-            color,
-            stars,
-            table.concat(list, ","),
-            origin
-        )
-    end
-    local msg = pack(flags)
-    while #msg > 240 and #flags > 0 do
-        flags[#flags] = nil
-        msg = pack(flags)
-    end
+    -- Wire format keeps an empty flags field for older clients; flags are never sent.
+    local color = C.COLOR_WIRE[Util.ValidColor(note.color)] or "-"
+    local stars = Util.ValidStars(note.stars) or 0
+    local msg = string.format(
+        "D\t%s\t%s\t%d\t%s\t%s",
+        subject,
+        color,
+        stars,
+        "",
+        origin
+    )
     if #msg > 240 then
         return nil
     end
@@ -263,39 +238,27 @@ function Sharing.CapOrigins(subject)
 end
 
 function Sharing.StoreRemote(sender, msg)
-    local _, subject, colorCode, stars, flagText, origin = strsplit("\t", msg)
+    local _, subject, colorCode, stars, _, origin = strsplit("\t", msg)
     subject = Util.SafeKey(subject)
     origin = Util.SafeKey(origin) or sender
     local me = Util.MyKey()
     if not subject or not origin or origin == me or subject == me or subject == origin then
         return
     end
+    -- Ignore flagText from the wire (and from older clients that still send flags).
     local note = {
         color = C.WIRE_COLOR[colorCode],
         stars = Util.ValidStars(stars),
         flags = {},
         at = Util.Now(),
     }
-    if type(flagText) == "string" and flagText ~= "" then
-        local flags = { strsplit(",", flagText) }
-        local count = 0
-        for _, flag in ipairs(flags) do
-            flag = Memory.SanitizeFlag(flag)
-            if flag then
-                note.flags[flag] = true
-                count = count + 1
-                if count >= 8 then
-                    break
-                end
-            end
-        end
-    end
     if type(SF.db.remote[subject]) ~= "table" then
         SF.db.remote[subject] = {}
     end
     if Sharing.NoteEmpty(note) then
         SF.db.remote[subject][origin] = nil
     else
+        note.flags = nil
         SF.db.remote[subject][origin] = note
         Sharing.CapOrigins(subject)
     end

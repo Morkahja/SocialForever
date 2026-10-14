@@ -25,7 +25,7 @@ You can:
 - Create your own custom flags.
 - Mark someone as **Kill on sight**.
 - Rate party members after a group ends.
-- Exchange marks and flags with nearby players who also use Social Forever.
+- Exchange marks with nearby players who also use Social Forever.
 
 Your social memory is stored account-wide in `SocialForeverDB`.
 
@@ -131,6 +131,8 @@ Right-click a player to add your own impression of them.
 
 ### Flags
 
+Flags are your private reminders. They stay on your machine and are never shared with other Social Forever users.
+
 The built-in flags are:
 
 - Really friendly
@@ -142,7 +144,7 @@ You can also create your own custom flags.
 
 ### Kill on Sight
 
-**Kill on sight** is a personal flag. It is never shared with other Social Forever users.
+**Kill on sight** is personal. It is never shared with other Social Forever users.
 
 ## Rating a group
 
@@ -162,7 +164,7 @@ Converting the group into a raid does not open the rating window.
 
 ## Shared marks
 
-If another nearby player is also using Social Forever, the two addons can quietly exchange marks and flags through WoW's addon-message system.
+If another nearby player is also using Social Forever, the two addons can quietly exchange **marks only** (Green, Yellow, Red) through WoW's addon-message system.
 
 Nothing is printed in normal chat.
 
@@ -176,9 +178,11 @@ Your own mark is included in the result. The tooltip shows how many good, okay, 
 
 Some information always stays personal and is never shared:
 
+- Flags (including custom ones).
 - How often you have seen someone.
 - Kill on sight.
 - How many times you have grouped with someone.
+- How many times they declined your invite.
 
 Two-word character names are not contacted through the hidden addon whisper because this client can incorrectly report those players as offline even while they are standing nearby.
 

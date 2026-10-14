@@ -27,18 +27,12 @@ function Memory.EnsurePlayer(key)
 end
 
 function Memory.HasOpinion(rec)
+    -- Shared opinion is marks only. Flags are personal and do not count.
     if type(rec) ~= "table" then
         return false
     end
     if Util.ValidColor(rec.color) or Util.ValidStars(rec.stars) then
         return true
-    end
-    if type(rec.flags) == "table" then
-        for _, on in pairs(rec.flags) do
-            if on then
-                return true
-            end
-        end
     end
     return false
 end
@@ -142,27 +136,14 @@ function Memory.BandFor(key)
 end
 
 function Memory.FlagCounts(key)
+    -- Personal flags only. Shared remote notes never contribute.
     local counts = {}
-    local function add(flags)
-        if type(flags) ~= "table" then
-            return
-        end
-        for flag, on in pairs(flags) do
+    local mine = SF.db.players[key]
+    if type(mine) == "table" and type(mine.flags) == "table" then
+        for flag, on in pairs(mine.flags) do
             flag = Memory.SanitizeFlag(flag)
             if on and flag then
-                counts[flag] = (counts[flag] or 0) + 1
-            end
-        end
-    end
-    local mine = SF.db.players[key]
-    if type(mine) == "table" then
-        add(mine.flags)
-    end
-    local remote = SF.db.remote[key]
-    if type(remote) == "table" then
-        for _, note in pairs(remote) do
-            if type(note) == "table" then
-                add(note.flags)
+                counts[flag] = 1
             end
         end
     end
@@ -448,10 +429,7 @@ function Memory.ToggleFlag(key, flag)
     else
         rec.flags[flag] = true
     end
-    Memory.Touch(rec)
-    if Sharing.ShareSubject then
-        Sharing.ShareSubject(key)
-    end
+    -- Flags stay local; do not touch/share (marks alone go over the wire).
     if UI.RefreshList then
         UI.RefreshList()
     end
@@ -489,10 +467,6 @@ function Memory.AddCustomFlag(key, text)
     SF.db.customFlags = kept
     local rec = Memory.EnsurePlayer(key)
     rec.flags[flag] = true
-    Memory.Touch(rec)
-    if Sharing.ShareSubject then
-        Sharing.ShareSubject(key)
-    end
     if UI.RefreshList then
         UI.RefreshList()
     end

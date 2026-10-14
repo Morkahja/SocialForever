@@ -1132,57 +1132,111 @@ function Detection.OnNameplateRemoved(unit)
     end
 end
 
+function Detection.NoteHelpfulAuraCaster(aura)
+    if type(aura) ~= "table" or Util.Secret(aura) then
+        return false
+    end
+    local helpful = aura.isHelpful
+    if helpful == nil and type(aura.isHarmful) == "boolean" then
+        helpful = not aura.isHarmful
+    end
+    if Util.PlainBool(helpful) ~= true and helpful ~= true then
+        return false
+    end
+    local key, classFile, raceFile, faction
+    local source = Util.PlainString(aura.sourceUnit)
+    if source then
+        local selfOk, isSelf = pcall(UnitIsUnit, source, "player")
+        if not (selfOk and Util.PlainBool(isSelf) == true) then
+            local playerOk, isPlayer = pcall(UnitIsPlayer, source)
+            if playerOk and Util.PlainBool(isPlayer) == true then
+                key, classFile, raceFile, faction = Util.UnitIdentity(source)
+                if key and Detection.UnitConnectedPlain(source) == false then
+                    key, classFile, raceFile, faction = nil, nil, nil, nil
+                end
+            end
+        end
+    end
+    if not key and C_UnitAuras and type(C_UnitAuras.GetAuraCasterGUID) == "function" then
+        local instanceId = Util.PlainNumber(aura.auraInstanceID)
+        if instanceId then
+            local ok, casterGuid = pcall(C_UnitAuras.GetAuraCasterGUID, "player", instanceId)
+            casterGuid = ok and Util.PlainString(casterGuid) or nil
+            if casterGuid then
+                key, classFile, raceFile, faction = Detection.LiveIdentityFromGuid(casterGuid)
+            end
+        end
+    end
+    if key and not Util.IsMe(key) then
+        Detection.Remember(key, 1, classFile, C.UNIT_TTL, nil, nil, raceFile, faction, "interaction")
+        return true
+    end
+    return false
+end
+
+-- When UNIT_AURA updateInfo is missing or sealed in combat, walk helpful auras.
+function Detection.ScanPlayerHelpfulCasters()
+    local found = false
+    if C_UnitAuras and type(C_UnitAuras.GetAuraDataByIndex) == "function" then
+        for i = 1, 40 do
+            local ok, aura = pcall(C_UnitAuras.GetAuraDataByIndex, "player", i, "HELPFUL")
+            if not ok or not aura then
+                break
+            end
+            if Detection.NoteHelpfulAuraCaster(aura) then
+                found = true
+            end
+        end
+        return found
+    end
+    if type(UnitAura) ~= "function" then
+        return false
+    end
+    for i = 1, 40 do
+        local ok, name, _, _, _, _, _, sourceUnit = pcall(UnitAura, "player", i, "HELPFUL")
+        if not ok or not name then
+            break
+        end
+        sourceUnit = Util.PlainString(sourceUnit)
+        if sourceUnit then
+            local selfOk, isSelf = pcall(UnitIsUnit, sourceUnit, "player")
+            if not (selfOk and Util.PlainBool(isSelf) == true) then
+                local playerOk, isPlayer = pcall(UnitIsPlayer, sourceUnit)
+                if playerOk and Util.PlainBool(isPlayer) == true then
+                    local key, classFile, raceFile, faction = Util.UnitIdentity(sourceUnit)
+                    if key and Detection.UnitConnectedPlain(sourceUnit) ~= false and not Util.IsMe(key) then
+                        Detection.Remember(key, 1, classFile, C.UNIT_TTL, nil, nil, raceFile, faction, "interaction")
+                        found = true
+                    end
+                end
+            end
+        end
+    end
+    return found
+end
+
 function Detection.OnPlayerAura(unit, updateInfo)
     unit = Util.PlainString(unit) or unit
     if unit ~= "player" then
         return
     end
-    if type(updateInfo) ~= "table" or Util.Secret(updateInfo) then
-        return
-    end
-    local added = updateInfo.addedAuras
-    if type(added) ~= "table" or Util.Secret(added) then
-        return
-    end
     local found = false
-    for i = 1, #added do
-        local aura = added[i]
-        if type(aura) == "table" and not Util.Secret(aura) then
-            local helpful = aura.isHelpful
-            if helpful == nil and type(aura.isHarmful) == "boolean" then
-                helpful = not aura.isHarmful
-            end
-            if Util.PlainBool(helpful) == true or helpful == true then
-                local key, classFile, raceFile, faction
-                local source = Util.PlainString(aura.sourceUnit)
-                if source then
-                    local selfOk, isSelf = pcall(UnitIsUnit, source, "player")
-                    if not (selfOk and Util.PlainBool(isSelf) == true) then
-                        local playerOk, isPlayer = pcall(UnitIsPlayer, source)
-                        if playerOk and Util.PlainBool(isPlayer) == true then
-                            key, classFile, raceFile, faction = Util.UnitIdentity(source)
-                            if key and Detection.UnitConnectedPlain(source) == false then
-                                key, classFile, raceFile, faction = nil, nil, nil, nil
-                            end
-                        end
-                    end
-                end
-                if not key and C_UnitAuras and type(C_UnitAuras.GetAuraCasterGUID) == "function" then
-                    local instanceId = Util.PlainNumber(aura.auraInstanceID)
-                    if instanceId then
-                        local ok, casterGuid = pcall(C_UnitAuras.GetAuraCasterGUID, "player", instanceId)
-                        casterGuid = ok and Util.PlainString(casterGuid) or nil
-                        if casterGuid then
-                            key, classFile, raceFile, faction = Detection.LiveIdentityFromGuid(casterGuid)
-                        end
-                    end
-                end
-                if key and not Util.IsMe(key) then
-                    Detection.Remember(key, 1, classFile, C.UNIT_TTL, nil, nil, raceFile, faction, "interaction")
-                    found = true
-                end
+    local added = nil
+    if type(updateInfo) == "table" and not Util.Secret(updateInfo) then
+        added = updateInfo.addedAuras
+        if type(added) == "table" and Util.Secret(added) then
+            added = nil
+        end
+    end
+    if type(added) == "table" then
+        for i = 1, #added do
+            if Detection.NoteHelpfulAuraCaster(added[i]) then
+                found = true
             end
         end
+    else
+        -- Classic-style UNIT_AURA (no updateInfo) or sealed combat payload.
+        found = Detection.ScanPlayerHelpfulCasters()
     end
     if found then
         Detection.Publish()

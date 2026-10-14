@@ -4,6 +4,16 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.4.4-beta — Flags stay personal; Nearby count matches rows
+
+- Wire `D` messages still reserve the flags field for older clients, but `Sharing.Encode` always sends it empty and `StoreRemote` ignores incoming flag text.
+- `Memory.FlagCounts` only reads your own `players[key].flags`. Tooltip no longer shows `xN` from remote votes.
+- `ToggleFlag` / `AddCustomFlag` no longer `Touch` or `ShareSubject`. `HasOpinion` / `NoteEmpty` are mark-only so flag-only records are not pushed to peers.
+- README: marks shared, flags + declines + KOS personal.
+- `IsListHovered` no longer uses `list:IsMouseOver()` (EnableMouse false chrome). That kept `listFrozen` stuck over empty space so `PaintListTabs` showed live `S.nearby` counts while `displayOrdered` stayed empty.
+- Frozen refreshes adopt brand-new Nearby/Zone keys into `displayOrdered` and paint via `scrollOnly`; otherwise tab counts use `displayNearCount` / `displayZoneCount`.
+- `OnPlayerAura`: if `updateInfo` / `addedAuras` missing or secret, `ScanPlayerHelpfulCasters` walks HELPFUL auras (GetAuraDataByIndex or UnitAura).
+
 ## 0.4.3-beta — Declined invite counter
 
 - `CHAT_MSG_SYSTEM` decline match already painted Invited→Declined; `UI.NoteDecline` now also calls `Memory.NoteDecline`, which increments `players[key].declines`.

@@ -627,11 +627,7 @@ function UI.ShowTip(owner, key)
     if #flags > 0 then
         local parts = {}
         for _, entry in ipairs(flags) do
-            if entry.count > 1 then
-                parts[#parts + 1] = entry.flag .. " x" .. entry.count
-            else
-                parts[#parts + 1] = entry.flag
-            end
+            parts[#parts + 1] = entry.flag
         end
         GameTooltip:AddLine("Flags: " .. table.concat(parts, ", "), 0.75, 0.85, 1, true)
     else
@@ -1480,9 +1476,10 @@ function UI.IsListHovered()
     if not S.main then
         return false
     end
-    if S.main.list and S.main.list:IsMouseOver() then
-        return true
-    end
+    -- Do not treat S.main.list:IsMouseOver() as a hover. The list chrome has
+    -- EnableMouse(false) so the cursor can sit over empty space while you look
+    -- at the world; counting that as hover left freeze stuck, so the Nearby
+    -- tab count could rise while the rows stayed empty.
     if S.main.bar and S.main.bar:IsShown() and S.main.bar:IsMouseOver() then
         return true
     end
@@ -1496,10 +1493,65 @@ function UI.IsListHovered()
                 if row.invite and row.invite:IsShown() and row.invite:IsMouseOver() then
                     return true
                 end
+                if row.combatShield and row.combatShield:IsShown() and row.combatShield:IsMouseOver() then
+                    return true
+                end
             end
         end
     end
     return false
+end
+
+-- While frozen, still append brand-new Nearby/Zone people so a heal/buff mid-fight
+-- is not stuck invisible behind a live tab count.
+function UI.TryAdoptFrozenNewcomers()
+    local tab = UI.GetListTab()
+    local source = tab == "zone" and S.inZone or S.nearby
+    if type(source) ~= "table" then
+        return false
+    end
+    if type(S.displayOrdered) ~= "table" then
+        S.displayOrdered = {}
+    end
+    local shown = {}
+    for i = 1, #S.displayOrdered do
+        local key = S.displayOrdered[i] and S.displayOrdered[i].key
+        if key then
+            shown[key] = true
+        end
+    end
+    local newKeys = {}
+    for key in pairs(source) do
+        if key and not shown[key] then
+            newKeys[#newKeys + 1] = key
+        end
+    end
+    if #newKeys == 0 then
+        return false
+    end
+    table.sort(newKeys)
+    local now = GetTime()
+    for i = 1, #newKeys do
+        local key = newKeys[i]
+        local entry = source[key]
+        if entry then
+            S.displayOrdered[#S.displayOrdered + 1] = entry
+            if not S.fadeInAt[key] and not S.listedKeys[key] then
+                S.fadeInAt[key] = now
+            end
+        end
+    end
+    local nearCount = 0
+    for _ in pairs(S.nearby or {}) do
+        nearCount = nearCount + 1
+    end
+    local zoneCount = 0
+    for _ in pairs(S.inZone or {}) do
+        zoneCount = zoneCount + 1
+    end
+    S.displayNearCount = nearCount
+    S.displayZoneCount = zoneCount
+    return true
 end
 
 function UI.PaintTargetHighlightsOnly()
@@ -1877,8 +1929,14 @@ function UI.RefreshList(opts)
 
     if S.listFrozen and not force and not scrollOnly then
         S.listDirty = true
+        if UI.TryAdoptFrozenNewcomers and UI.TryAdoptFrozenNewcomers() then
+            -- New sightings (heal/buff/etc.) join the frozen snapshot; paint them.
+            UI.RefreshList({ scrollOnly = true })
+            return
+        end
         UI.PaintTargetHighlightsOnly()
-        UI.PaintListTabs()
+        -- Keep the tab counts honest to what the frozen rows show.
+        UI.PaintListTabs(S.displayNearCount, S.displayZoneCount)
         return
     end
 

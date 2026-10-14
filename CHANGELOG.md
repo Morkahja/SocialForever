@@ -1,5 +1,11 @@
 # Social Forever — Changelog
 
+## 0.4.4-beta — 2026-10-14
+
+- Flags are personal only. Nearby Social Forever users still exchange Green / Yellow / Red marks, but not flags. Your flags stay as private reminders on your character.
+- Fixed a Nearby glitch where the tab could show **(1)** while the list stayed empty: the empty list area no longer keeps the list “frozen,” and new people (such as someone who just buffed or healed you) still appear even if your mouse is on a row.
+- Buff/heal detection still works when the combat aura payload is missing or sealed, by reading your helpful auras directly.
+
 ## 0.4.3-beta — 2026-10-13
 
 - When someone declines your party invite, Social Forever remembers it. The tooltip shows **Denied invite** in red with the count (1 time, 2 times, …), next to how often you have grouped together.

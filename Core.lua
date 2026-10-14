@@ -671,6 +671,16 @@ function Util.InitDB()
         end
         db.migratedIgnoreFlags = true
     end
+    -- Drop any flags that older builds stored from peers; flags are personal only.
+    for _, bucket in pairs(db.remote) do
+        if type(bucket) == "table" then
+            for _, note in pairs(bucket) do
+                if type(note) == "table" and note.flags ~= nil then
+                    note.flags = nil
+                end
+            end
+        end
+    end
     SF.Memory.InvalidateMaxFamiliarity()
 end
 
