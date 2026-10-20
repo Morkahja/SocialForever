@@ -7,7 +7,7 @@ While you quest, the same players often cross your path again and again. Social 
 Over time, strangers can become familiar names.
 
 Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
-Current version: **0.4.1**
+Current version: **0.4.5-beta**
 
 ## What it does
 
@@ -26,6 +26,8 @@ You can:
 - Mark someone as **Kill on sight**.
 - Rate party members after a group ends.
 - Exchange marks with nearby players who also use Social Forever.
+- Quietly notice familiar faces again (blue or purple names) with a soft chat thought.
+- Reset one remembered player, or all of them, from Settings → Memory.
 
 Your social memory is stored account-wide in `SocialForeverDB`.
 
@@ -94,6 +96,8 @@ If the other player is still in combat, their invite popup waits until they leav
 
 Social Forever remembers how often you encounter each player.
 
+A “Been nearby” count rises when someone enters Nearby in a **new** place (subzone, or whole city in a capital). If they leave the list and return in the **same** place — including after a reload — that does not add another count.
+
 Names gradually change color based on how familiar that person is compared with the player you have encountered most often:
 
 | Color | Familiarity |
@@ -105,6 +109,14 @@ Names gradually change color based on how familiar that person is compared with 
 Players of the other faction use a dusty war-red instead of the familiarity colors, so they read as hostile without looking like a Red mark.
 
 A Green, Yellow, Red, or Kill on Sight mark overrides familiarity and faction color.
+
+### Recognition
+
+When a **blue** or **purple** familiar appears on Nearby (not only on the zone tab), or when you target them, Social Forever may print a quiet gray thought in chat, such as:
+
+I've seen this Human Paladin before.
+
+It waits a few seconds after they join Nearby so the list can settle first. Each person has a 20-minute cooldown that survives reload and logout. Party or raid members do not trigger it. There is no sound and no popup.
 
 Hover over a player to see more of their history, including:
 
@@ -214,7 +226,7 @@ The window normally sits above the chat frame.
 - Hover the **x** for a reminder that `/sf` or `/socialforever` brings the window back.
 - Drag the title bar to move it.
 - Drag the `..` grip in the bottom-right corner to resize it.
-- Use the gear button to change the name size, background opacity, and friend auto-invite setting.
+- Use the gear button to change grouping options, name size, background opacity, and Memory reset (one player or all remembered players).
 - Use the mouse wheel to scroll longer lists.
 - Press Escape to close the right-click menu or group-rating window. The main Social Forever window stays open.
 

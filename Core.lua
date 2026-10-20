@@ -47,6 +47,8 @@ C.MAX_SHARE = 8
 C.HELLO_GAP = 300
 C.SAME_MOB_COOLDOWN = 300
 C.SAME_MOB_NEARBY_GRACE = 60
+-- Familiar recognition thought: per-player cooldown (server time seconds).
+C.RECOGNITION_COOLDOWN = 1200
 
 C.PRESET_FLAGS = {
     "Really friendly",
@@ -165,6 +167,9 @@ S.P = {
     sameMobStamp = nil,
     sameMobPromptPending = false,
     meterAttempt = 0,
+    -- Recognition: pending timer tokens keyed by player.
+    recognitionToken = {},
+    recognitionPending = {},
 }
 
 C.LOOK_UNITS = {

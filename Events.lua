@@ -187,8 +187,14 @@ events:SetScript("OnEvent", function(_, event, ...)
         Detection.RequestGeneralRoster(false)
         return
     end
+    if event == "PLAYER_TARGET_CHANGED" then
+        Detection.Scan()
+        if Memory.NoteTargetRecognition then
+            Memory.NoteTargetRecognition()
+        end
+        return
+    end
     if event == "UPDATE_MOUSEOVER_UNIT"
-        or event == "PLAYER_TARGET_CHANGED"
         or event == "PLAYER_FOCUS_CHANGED"
         or event == "PLAYER_SOFT_ENEMY_CHANGED"
         or event == "PLAYER_SOFT_FRIEND_CHANGED"

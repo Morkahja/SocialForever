@@ -751,7 +751,7 @@ function UI.BuildMain()
         self:SetBackdropColor(0.24, 0.20, 0.08, 0.98)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Settings", 1, 0.82, 0.25)
-        GameTooltip:AddLine("Grouping, name size, and background.", 0.9, 0.9, 0.9, true)
+        GameTooltip:AddLine("Grouping, name size, background, and memory.", 0.9, 0.9, 0.9, true)
         GameTooltip:Show()
     end)
     settings:SetScript("OnLeave", function(self)
@@ -762,7 +762,7 @@ function UI.BuildMain()
 
     local panel = CreateFrame("Frame", "SocialForeverSettings", UIParent, "BackdropTemplate")
     panel:SetFrameStrata("DIALOG")
-    panel:SetSize(176, 348)
+    panel:SetSize(176, 430)
     panel:SetClampedToScreen(true)
     panel:EnableMouse(true)
     panel:Hide()
@@ -963,6 +963,191 @@ function UI.BuildMain()
     size16:SetScript("OnClick", PickSize(16))
     size18:SetScript("OnClick", PickSize(18))
     size20:SetScript("OnClick", PickSize(20))
+
+    local memoryHead = MenuRow(-354, false)
+    memoryHead.label:SetText("Memory")
+    memoryHead.label:SetTextColor(0.75, 0.68, 0.4)
+    local resetOne = MenuRow(-372, true)
+    resetOne.label:SetText("  Reset one player…")
+    resetOne.label:SetTextColor(0.9, 0.9, 0.9)
+    local resetAll = MenuRow(-390, true)
+    resetAll.label:SetText("  Reset all remembered…")
+    resetAll.label:SetTextColor(0.95, 0.55, 0.45)
+    LeaveChoice(resetOne)
+    LeaveChoice(resetAll)
+
+    local function BuildMemoryDialog()
+        if S.memoryDialog then
+            return S.memoryDialog
+        end
+        local dlg = CreateFrame("Frame", "SocialForeverMemoryDialog", UIParent, "BackdropTemplate")
+        dlg:SetFrameStrata("FULLSCREEN_DIALOG")
+        dlg:SetSize(280, 132)
+        dlg:SetClampedToScreen(true)
+        dlg:EnableMouse(true)
+        dlg:Hide()
+        UI.Chrome(dlg)
+        S.memoryDialog = dlg
+
+        local title = dlg:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        title:SetPoint("TOPLEFT", 12, -10)
+        title:SetPoint("RIGHT", -12, 0)
+        title:SetJustifyH("LEFT")
+        title:SetTextColor(1, 0.82, 0.25)
+        dlg.title = title
+
+        local body = dlg:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        body:SetPoint("TOPLEFT", 12, -32)
+        body:SetPoint("RIGHT", -12, 0)
+        body:SetJustifyH("LEFT")
+        body:SetWordWrap(true)
+        body:SetTextColor(0.9, 0.9, 0.85)
+        dlg.body = body
+
+        local box = CreateFrame("EditBox", nil, dlg, "BackdropTemplate")
+        box:SetPoint("TOPLEFT", 12, -62)
+        box:SetSize(256, 22)
+        box:SetAutoFocus(false)
+        box:SetFontObject(GameFontHighlight)
+        box:SetTextInsets(6, 6, 0, 0)
+        box:SetBackdrop(C.FLAT_BACKDROP)
+        box:SetBackdropColor(0.08, 0.08, 0.08, 1)
+        box:SetBackdropBorderColor(0.45, 0.38, 0.16, 0.95)
+        box:SetScript("OnEscapePressed", function(self)
+            self:ClearFocus()
+            dlg:Hide()
+        end)
+        box:SetScript("OnEnterPressed", function()
+            if dlg.Confirm then
+                dlg:Confirm()
+            end
+        end)
+        dlg.box = box
+
+        local ok = UI.FlatButton(dlg, "Confirm", 88, 20)
+        ok:SetPoint("BOTTOMLEFT", 16, 12)
+        local cancel = UI.FlatButton(dlg, "Cancel", 88, 20)
+        cancel:SetPoint("LEFT", ok, "RIGHT", 10, 0)
+        cancel:SetScript("OnClick", function()
+            dlg:Hide()
+        end)
+        dlg.ok = ok
+
+        function dlg:OpenResetOne()
+            self.mode = "one"
+            self.pendingKey = nil
+            self.title:SetText("Reset one player")
+            self.body:SetText("Type their name, then confirm. This forgets their history.")
+            self.box:Show()
+            self.box:SetText("")
+            self:ClearAllPoints()
+            if S.settingsMenu and S.settingsMenu:IsShown() then
+                self:SetPoint("TOPRIGHT", S.settingsMenu, "TOPLEFT", -8, 0)
+            else
+                self:SetPoint("CENTER")
+            end
+            self:Show()
+            self:Raise()
+            self.box:SetFocus()
+        end
+
+        function dlg:OpenResetAll()
+            self.mode = "all"
+            self.pendingKey = nil
+            self.title:SetText("Reset all remembered")
+            self.body:SetText("Forget every remembered player? Window settings stay.")
+            self.box:Hide()
+            self.box:ClearFocus()
+            self:ClearAllPoints()
+            if S.settingsMenu and S.settingsMenu:IsShown() then
+                self:SetPoint("TOPRIGHT", S.settingsMenu, "TOPLEFT", -8, 0)
+            else
+                self:SetPoint("CENTER")
+            end
+            self:Show()
+            self:Raise()
+        end
+
+        function dlg:Confirm()
+            if self.mode == "all" then
+                if Memory.ResetAllPlayers then
+                    Memory.ResetAllPlayers()
+                end
+                self:Hide()
+                if S.settingsMenu then
+                    S.settingsMenu:Hide()
+                end
+                return
+            end
+            if self.mode == "one-confirm" and self.pendingKey then
+                if Memory.ResetPlayer then
+                    Memory.ResetPlayer(self.pendingKey)
+                end
+                self.pendingKey = nil
+                self:Hide()
+                return
+            end
+            local typed = Util.Trim(self.box:GetText() or "")
+            if typed == "" then
+                return
+            end
+            local key = UI.MatchKnownKey and UI.MatchKnownKey(typed) or Util.SafeKey(typed:gsub(" ", "-"))
+            if not key then
+                return
+            end
+            local known = SF.db and SF.db.players and SF.db.players[key]
+            if type(known) ~= "table" then
+                self.body:SetText("No remembered player named that.")
+                return
+            end
+            self.mode = "one-confirm"
+            self.pendingKey = key
+            self.box:Hide()
+            self.box:ClearFocus()
+            local spoken = UI.SpokenName and UI.SpokenName(key) or key
+            self.body:SetText("Forget " .. spoken .. " and all their Social Forever history?")
+        end
+
+        ok:SetScript("OnClick", function()
+            dlg:Confirm()
+        end)
+
+        tinsert(UISpecialFrames, "SocialForeverMemoryDialog")
+        return dlg
+    end
+
+    resetOne:SetScript("OnClick", function()
+        BuildMemoryDialog():OpenResetOne()
+    end)
+    resetAll:SetScript("OnClick", function()
+        BuildMemoryDialog():OpenResetAll()
+    end)
+    resetOne:SetScript("OnEnter", function(self)
+        self.label:SetTextColor(1, 0.95, 0.55)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Reset one player", 1, 0.82, 0.25)
+        GameTooltip:AddLine("Forget one character's nearby count, places, marks, flags, and recognition cooldown.", 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    resetOne:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+        PaintSettingsMenu()
+        resetOne.label:SetText("  Reset one player…")
+        resetOne.label:SetTextColor(0.9, 0.9, 0.9)
+    end)
+    resetAll:SetScript("OnEnter", function(self)
+        self.label:SetTextColor(1, 0.7, 0.55)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Reset all remembered", 1, 0.55, 0.4)
+        GameTooltip:AddLine("Clears every remembered player. Does not change window or grouping settings.", 0.9, 0.9, 0.9, true)
+        GameTooltip:Show()
+    end)
+    resetAll:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+        PaintSettingsMenu()
+        resetAll.label:SetText("  Reset all remembered…")
+        resetAll.label:SetTextColor(0.95, 0.55, 0.45)
+    end)
 
     panel:SetScript("OnShow", function(self)
         self.block = true

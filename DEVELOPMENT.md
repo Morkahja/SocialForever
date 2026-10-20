@@ -4,6 +4,16 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.4.5-beta — Familiar recognition thoughts
+
+- Uses existing `nearbyTimes` / `FamiliarityBand` (blue/purple only). No new score.
+- `Detection.Publish`: keys newly in `S.nearby` (not zone) call `Memory.NoteNearbyRecognition` after `S.armed`; random delay 2–5s (0.5s steps) then `FireRecognition`.
+- `PLAYER_TARGET_CHANGED` → `Memory.NoteTargetRecognition` (immediate if eligible).
+- Persist `rec.lastRecognitionAt` via `Util.Now()` / `GetServerTime`; cooldown `C.RECOGNITION_COOLDOWN` 1200s. Skip if grouped, white band, or pending.
+- Chat: muted gray `DEFAULT_CHAT_FRAME:AddMessage`, no addon prefix, no sound.
+- Settings Memory: reset one (name + confirm) / reset all; clears players, remote, invite/hello/peer runtime for those keys; keeps UI prefs.
+- `NoteNearbyPlace`: on new sighting (`isNew`), charge `nearbyTimes` only if `CurrentArea()` differs from saved `lastFamiliarityPlace` (fallback `nearbyArea`). Same place after drop/reload does not increment; `lastFamiliarityPlace` set only when charging.
+
 ## 0.4.4-beta — Flags stay personal; Nearby count matches rows
 
 - Wire `D` messages still reserve the flags field for older clients, but `Sharing.Encode` always sends it empty and `StoreRemote` ignores incoming flag text.

@@ -295,9 +295,19 @@ function Detection.Publish()
         .. "\27"
         .. (S.P.zoneRosterFull and "+" or "")
     local changed = sig ~= S.P.publishSig
+    local previousNearby = S.nearby
     S.nearby = found
     S.inZone = zoneFound
     S.P.publishSig = sig
+    -- New Nearby appearance only (not zone roster / yell). Skip until armed
+    -- so login does not dump a wall of recognition thoughts.
+    if S.armed and Memory.NoteNearbyRecognition then
+        for key in pairs(found) do
+            if type(previousNearby) ~= "table" or not previousNearby[key] then
+                Memory.NoteNearbyRecognition(key)
+            end
+        end
+    end
     if changed and UI.RefreshList then
         if UI.EnsureListFreezeHonest then
             UI.EnsureListFreezeHonest()

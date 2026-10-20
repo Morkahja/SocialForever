@@ -1,5 +1,11 @@
 # Social Forever — Changelog
 
+## 0.4.5-beta — 2026-10-20
+
+- Familiar recognition: when a blue or purple familiar enters Nearby (not Zone alone) or you target them, chat quietly thinks **I've seen this Human Paladin before.** (race/class when known). Per-player 20-minute cooldown survives reload/logout. Nearby thoughts wait a random 2–5 seconds so the list can settle first.
+- Settings → Memory: reset one remembered player, or reset all remembered players (window and grouping settings stay).
+- Nearby familiarity is place-based again: dropping off the list and coming back in the **same** subzone or city does not add another “Been nearby” charge (survives reload/logout). A charge only happens when you meet them again in a **different** place.
+
 ## 0.4.4-beta — 2026-10-14
 
 - Flags are personal only. Nearby Social Forever users still exchange Green / Yellow / Red marks, but not flags. Your flags stay as private reminders on your character.

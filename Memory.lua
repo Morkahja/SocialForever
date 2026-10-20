@@ -305,8 +305,10 @@ function Memory.CurrentArea()
     return nil
 end
 
--- isNew: first time this person appears in the current Nearby sightings.
--- Each Nearby encounter counts once for nearbyTimes (and unlocks place history).
+-- isNew: they just entered Nearby sightings (were not on the list).
+-- Familiarity charges only when that re-entry is in a *different* place than
+-- the last charged meeting. Same subzone/city after a drop, reload, or relog
+-- does not farm nearbyTimes. lastFamiliarityPlace is saved in SocialForeverDB.
 function Memory.NoteNearbyPlace(key, isNew)
     local area = Memory.CurrentArea()
     if not area or not SF.db then
@@ -314,8 +316,19 @@ function Memory.NoteNearbyPlace(key, isNew)
     end
     local rec = Memory.EnsurePlayer(key)
     if isNew then
-        rec.nearbyTimes = (tonumber(rec.nearbyTimes) or 0) + 1
-        Memory.NoteFamiliarityMax(key)
+        local lastPlace = nil
+        if type(rec.lastFamiliarityPlace) == "string" and rec.lastFamiliarityPlace ~= "" then
+            lastPlace = rec.lastFamiliarityPlace
+        elseif type(rec.nearbyArea) == "string" and rec.nearbyArea ~= "" then
+            -- Older saves before lastFamiliarityPlace existed.
+            lastPlace = rec.nearbyArea
+        end
+        local samePlace = lastPlace and lastPlace:lower() == area:lower()
+        if not samePlace then
+            rec.nearbyTimes = (tonumber(rec.nearbyTimes) or 0) + 1
+            rec.lastFamiliarityPlace = area
+            Memory.NoteFamiliarityMax(key)
+        end
     end
     rec.nearbyArea = area
     return area
@@ -330,9 +343,25 @@ function Memory.InCity()
 end
 
 
-function Memory.SeenRGB(key, maxCount)
+-- Same bands as SeenRGB: white / blue / purple from nearbyTimes vs max.
+function Memory.FamiliarityBand(key)
     local n = Memory.Familiarity(key)
+    local maxCount = Memory.MaxFamiliarity()
+    if n > 1 and maxCount and maxCount > 1 then
+        local ratio = n / maxCount
+        if ratio > 0.80 then
+            return "purple"
+        end
+        if ratio > 0.30 then
+            return "blue"
+        end
+    end
+    return "white"
+end
+
+function Memory.SeenRGB(key, maxCount)
     local band = "white"
+    local n = Memory.Familiarity(key)
     if n > 1 and maxCount and maxCount > 1 then
         local ratio = n / maxCount
         if ratio > 0.80 then
@@ -350,6 +379,251 @@ function Memory.NameRGB(key, entry, maxSeen)
         return C.ENEMY_FACTION_RGB[1], C.ENEMY_FACTION_RGB[2], C.ENEMY_FACTION_RGB[3]
     end
     return Memory.SeenRGB(key, maxSeen)
+end
+
+--------------------------------------------------
+-- Familiar recognition (quiet chat thought)
+--------------------------------------------------
+
+function Memory.PlayerIdentityFiles(key)
+    local seen = S.sightings and S.sightings[key]
+    local near = S.nearby and S.nearby[key]
+    local rec = SF.db and SF.db.players and SF.db.players[key]
+    local classFile = (seen and seen.class) or (near and near.class) or (type(rec) == "table" and rec.class) or nil
+    local raceFile = (seen and seen.race) or (near and near.race) or (type(rec) == "table" and rec.race) or nil
+    return classFile, raceFile
+end
+
+function Memory.RecognitionPhrase(key)
+    local classFile, raceFile = Memory.PlayerIdentityFiles(key)
+    local race = UI.RaceLabel and UI.RaceLabel(raceFile) or nil
+    local class = UI.ClassLabel and UI.ClassLabel(classFile) or nil
+    if race and class then
+        return "I've seen this " .. race .. " " .. class .. " before."
+    end
+    if class then
+        return "I've seen this " .. class .. " before."
+    end
+    if race then
+        return "I've seen this " .. race .. " before."
+    end
+    return "I've seen this player before."
+end
+
+function Memory.RecognitionOnCooldown(key)
+    local rec = SF.db and SF.db.players and SF.db.players[key]
+    local last = type(rec) == "table" and tonumber(rec.lastRecognitionAt) or nil
+    if not last then
+        return false
+    end
+    local now = Util.Now()
+    if not now then
+        return false
+    end
+    local gap = C.RECOGNITION_COOLDOWN or 1200
+    return (now - last) < gap
+end
+
+function Memory.RecognitionEligible(key)
+    key = Util.SafeKey(key)
+    if not key or Util.IsMe(key) then
+        return false
+    end
+    if Group.InMyGroup and Group.InMyGroup(key) then
+        return false
+    end
+    local band = Memory.FamiliarityBand(key)
+    if band ~= "blue" and band ~= "purple" then
+        return false
+    end
+    if Memory.RecognitionOnCooldown(key) then
+        return false
+    end
+    return true
+end
+
+function Memory.CancelRecognition(key)
+    key = Util.SafeKey(key)
+    if not key then
+        return
+    end
+    S.P.recognitionToken[key] = (S.P.recognitionToken[key] or 0) + 1
+end
+
+function Memory.PrintRecognition(key)
+    local text = Memory.RecognitionPhrase(key)
+    local frame = DEFAULT_CHAT_FRAME or ChatFrame1
+    if frame and frame.AddMessage then
+        frame:AddMessage(text, 0.62, 0.62, 0.62)
+    end
+end
+
+function Memory.FireRecognition(key)
+    key = Util.SafeKey(key)
+    if not key then
+        return false
+    end
+    if not Memory.RecognitionEligible(key) then
+        return false
+    end
+    local rec = Memory.EnsurePlayer(key)
+    rec.lastRecognitionAt = Util.Now()
+    Memory.PrintRecognition(key)
+    return true
+end
+
+-- delaySeconds nil/0 = fire now (target). Nearby uses a random 2–5s half-second step.
+function Memory.ScheduleRecognition(key, delaySeconds)
+    key = Util.SafeKey(key)
+    if not key then
+        return false
+    end
+    if not Memory.RecognitionEligible(key) then
+        return false
+    end
+    if not S.P.recognitionPending then
+        S.P.recognitionPending = {}
+    end
+    if S.P.recognitionPending[key] then
+        return false
+    end
+    local delay = tonumber(delaySeconds)
+    if not delay or delay <= 0 then
+        S.P.recognitionPending[key] = true
+        Memory.FireRecognition(key)
+        S.P.recognitionPending[key] = nil
+        return true
+    end
+    local token = (S.P.recognitionToken[key] or 0) + 1
+    S.P.recognitionToken[key] = token
+    S.P.recognitionPending[key] = true
+    C_Timer.After(delay, function()
+        if S.P.recognitionToken[key] ~= token then
+            return
+        end
+        S.P.recognitionPending[key] = nil
+        Memory.FireRecognition(key)
+    end)
+    return true
+end
+
+function Memory.RecognitionDelay()
+    -- Random 2.0 … 5.0 in half-second steps.
+    local steps = 7
+    local index = math.random(1, steps)
+    return 1.5 + index * 0.5
+end
+
+function Memory.NoteNearbyRecognition(key)
+    if not S.armed then
+        return
+    end
+    key = Util.SafeKey(key)
+    if not key then
+        return
+    end
+    Memory.ScheduleRecognition(key, Memory.RecognitionDelay())
+end
+
+function Memory.NoteTargetRecognition()
+    if not S.armed or not SF.db then
+        return
+    end
+    local okPlayer, isPlayer = pcall(UnitIsPlayer, "target")
+    if not okPlayer or Util.PlainBool(isPlayer) ~= true then
+        return
+    end
+    local key = Util.UnitIdentity("target")
+    if not key or Util.IsMe(key) then
+        return
+    end
+    -- Deliberate target: quiet thought now (Nearby appearances stay delayed).
+    Memory.ScheduleRecognition(key, nil)
+end
+
+function Memory.ResetPlayer(key)
+    key = Util.SafeKey(key)
+    if not key or not SF.db then
+        return false
+    end
+    Memory.CancelRecognition(key)
+    if S.P.recognitionPending then
+        S.P.recognitionPending[key] = nil
+    end
+    if type(SF.db.players) == "table" then
+        SF.db.players[key] = nil
+    end
+    if type(SF.db.remote) == "table" then
+        SF.db.remote[key] = nil
+    end
+    if type(SF.db.ignored) == "table" then
+        SF.db.ignored[key] = nil
+    end
+    S.inviteState[key] = nil
+    if S.sameMobInviteAt then
+        S.sameMobInviteAt[key] = nil
+    end
+    if S.helloAt then
+        S.helloAt[key] = nil
+    end
+    if S.helloReplyAt then
+        S.helloReplyAt[key] = nil
+    end
+    if S.pushedAt then
+        S.pushedAt[key] = nil
+    end
+    if S.peers then
+        S.peers[key] = nil
+    end
+    Memory.InvalidateMaxFamiliarity()
+    if Detection.Publish then
+        Detection.Publish()
+    elseif UI.RefreshList then
+        UI.RefreshList()
+    end
+    return true
+end
+
+function Memory.ResetAllPlayers()
+    if not SF.db then
+        return false
+    end
+    if type(S.P.recognitionToken) == "table" then
+        wipe(S.P.recognitionToken)
+    end
+    if type(S.P.recognitionPending) == "table" then
+        wipe(S.P.recognitionPending)
+    else
+        S.P.recognitionPending = {}
+    end
+    SF.db.players = {}
+    SF.db.remote = {}
+    if type(SF.db.ignored) == "table" then
+        wipe(SF.db.ignored)
+    end
+    wipe(S.inviteState)
+    if S.sameMobInviteAt then
+        wipe(S.sameMobInviteAt)
+    end
+    if S.helloAt then
+        wipe(S.helloAt)
+    end
+    if S.helloReplyAt then
+        wipe(S.helloReplyAt)
+    end
+    if S.pushedAt then
+        wipe(S.pushedAt)
+    end
+    if S.peers then
+        wipe(S.peers)
+    end
+    Memory.InvalidateMaxFamiliarity()
+    if Detection.Publish then
+        Detection.Publish()
+    elseif UI.RefreshList then
+        UI.RefreshList()
+    end
+    return true
 end
 
 function Memory.FlaggedKos(key)
