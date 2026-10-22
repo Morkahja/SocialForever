@@ -543,36 +543,19 @@ function UI.ShowTip(owner, key)
     end
     GameTooltip:AddLine("Been nearby: " .. TimesPhrase(Memory.SeenCount(key, "nearbyTimes")), 0.8, 0.86, 1, true)
     local seen = S.sightings[key] or S.zoneSeen[key]
+    local lastPlace = nil
     if seen then
-        local ago = GetTime() - (seen.at or GetTime())
-        local minutes = math.floor(math.max(0, ago) / 60)
-        local when
-        if ago < 60 then
-            when = "just now"
-        elseif minutes == 1 then
-            when = "1 minute ago"
-        else
-            when = minutes .. " minutes ago"
+        lastPlace = seen.area
+        if type(lastPlace) ~= "string" or lastPlace == "" then
+            lastPlace = seen.zone
         end
-        local area = seen.area
-        if type(area) ~= "string" or area == "" then
-            area = seen.zone
-        end
-        if type(area) ~= "string" or area == "" then
-            local rec = SF.db and SF.db.players and SF.db.players[key]
-            area = type(rec) == "table" and rec.nearbyArea or nil
-        end
-        if type(area) == "string" and area ~= "" then
-            if when == "just now" then
-                GameTooltip:AddLine("Last seen just now in " .. area, 0.9, 0.9, 0.75, true)
-            else
-                GameTooltip:AddLine("Last seen " .. when .. " in " .. area, 0.9, 0.9, 0.75, true)
-            end
-        elseif when == "just now" then
-            GameTooltip:AddLine("Last seen just now", 0.9, 0.9, 0.75, true)
-        else
-            GameTooltip:AddLine("Last seen " .. when, 0.9, 0.9, 0.75, true)
-        end
+    end
+    if type(lastPlace) ~= "string" or lastPlace == "" then
+        local rec = SF.db and SF.db.players and SF.db.players[key]
+        lastPlace = type(rec) == "table" and rec.nearbyArea or nil
+    end
+    if type(lastPlace) == "string" and lastPlace ~= "" then
+        GameTooltip:AddLine("Last seen: " .. lastPlace, 0.9, 0.9, 0.75, true)
     end
     local history = SF.db and SF.db.players and SF.db.players[key]
     local places = type(history) == "table" and history.places
@@ -584,10 +567,11 @@ function UI.ShowTip(owner, key)
             end
         end
         if #names > 0 then
-            GameTooltip:AddLine("Seen before in " .. table.concat(names, ", "), 0.75, 0.85, 0.75, true)
+            GameTooltip:AddLine("Seen before: " .. table.concat(names, ", "), 0.75, 0.85, 0.75, true)
         end
     end
     local general, good, okay, bad = Memory.Tally(key)
+    -- Skip empty "no mark" lines — name color already shows the mark.
     if general then
         local tint = C.COLOR_RGB[general]
         GameTooltip:AddLine(
@@ -595,16 +579,12 @@ function UI.ShowTip(owner, key)
             tint[1], tint[2], tint[3],
             true
         )
-    else
-        GameTooltip:AddLine("General: no mark yet", 0.7, 0.7, 0.7, true)
     end
     local mine = SF.db.players[key]
     local myColor = type(mine) == "table" and Util.ValidColor(mine.color)
     if myColor then
         local tint = C.COLOR_RGB[myColor]
         GameTooltip:AddLine("Your mark: " .. C.COLOR_LABEL[myColor], tint[1], tint[2], tint[3], true)
-    elseif general then
-        GameTooltip:AddLine("Your mark: none yet", 0.7, 0.7, 0.7, true)
     end
     local groups = type(mine) == "table" and tonumber(mine.groups) or 0
     if not groups or groups < 0 then
@@ -630,8 +610,6 @@ function UI.ShowTip(owner, key)
             parts[#parts + 1] = entry.flag
         end
         GameTooltip:AddLine("Flags: " .. table.concat(parts, ", "), 0.75, 0.85, 1, true)
-    else
-        GameTooltip:AddLine("Flags: none", 0.55, 0.55, 0.55, true)
     end
     GameTooltip:Show()
 end

@@ -7,7 +7,7 @@ While you quest, the same players often cross your path again and again. Social 
 Over time, strangers can become familiar names.
 
 Built by **Babunigaming** for **World of Warcraft: Forever** (Interface 16001).  
-Current version: **0.4.5-beta**
+Current version: **0.4.6-beta**
 
 ## What it does
 
@@ -120,14 +120,13 @@ It waits a few seconds after they join Nearby so the list can settle first. Each
 
 Hover over a player to see more of their history, including:
 
-- When they were last seen.
-- The subzone where they were last seen.
-- Other zones or dungeons where you have encountered them.
+- Last seen: the place.
+- Seen before: other zones or dungeons where you have met them.
 - How many times they have been nearby.
 - How many times you have grouped together.
 - How many times they declined your invite (in red, when it has happened).
-- Your mark and the shared mark.
-- Any flags attached to them.
+- Your mark and the shared mark, when set.
+- Flags, when you have attached any.
 
 Their level appears to the right of the name once WoW has reported it through your target, mouseover, or group. It uses that player's class color. Between the name and the level is a small icon for their race and class together (including Skyborne). A chat message by itself does not reveal a player's level.
 

@@ -4,6 +4,11 @@ Social Forever, by Babunigaming. Newest step first.
 
 When a change ships, add it at the top. Keep the note about what the player can see, and why it was made.
 
+## 0.4.6-beta — Cleaner hover tooltip
+
+- `UI.ShowTip`: drop empty General / Your mark / Flags lines. Keep General tally and Flags list only when non-empty; name color already carries the mark.
+- Last seen / Seen before use the same `Label: value` shape as Been nearby (`Last seen: Astranaar`, `Seen before: Ashenvale, Darnassus`); time-ago phrasing removed.
+
 ## 0.4.5-beta — Familiar recognition thoughts
 
 - Uses existing `nearbyTimes` / `FamiliarityBand` (blue/purple only). No new score.

@@ -1,5 +1,10 @@
 # Social Forever — Changelog
 
+## 0.4.6-beta — 2026-10-22
+
+- Player tooltips no longer show **General: no mark yet**, **Your mark: none yet**, or **Flags: none**. General and Flags lines appear only when there is something to say.
+- Tooltip place lines match **Been nearby:** style: **Last seen: Place** and **Seen before: Place, Place** (no “minutes ago” wording).
+
 ## 0.4.5-beta — 2026-10-20
 
 - Familiar recognition: when a blue or purple familiar enters Nearby (not Zone alone) or you target them, chat quietly thinks **I've seen this Human Paladin before.** (race/class when known). Per-player 20-minute cooldown survives reload/logout. Nearby thoughts wait a random 2–5 seconds so the list can settle first.
